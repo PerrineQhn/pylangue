@@ -53,3 +53,24 @@ export function importProgress(json: string): Progress | null {
 }
 
 export const persistent = hasLS
+
+// --- Thème ---
+const THEME_KEY = 'pylangue-theme'
+let themeMemory: 'dark' | 'light' = 'dark'
+
+export function loadTheme(): 'dark' | 'light' {
+  if (hasLS) {
+    try {
+      const t = window.localStorage.getItem(THEME_KEY)
+      if (t === 'light' || t === 'dark') return t
+    } catch { /* ignore */ }
+  }
+  return themeMemory
+}
+
+export function saveTheme(t: 'dark' | 'light') {
+  themeMemory = t
+  if (hasLS) {
+    try { window.localStorage.setItem(THEME_KEY, t) } catch { /* ignore */ }
+  }
+}

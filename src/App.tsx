@@ -3,16 +3,21 @@ import { Sidebar } from '@/components/Sidebar'
 import { Home } from '@/components/Home'
 import { LessonView } from '@/components/LessonView'
 import { MODULES, moduleById } from '@/data'
-import { loadProgress, saveProgress, type Progress } from '@/lib/storage'
+import { loadProgress, saveProgress, loadTheme, saveTheme, type Progress } from '@/lib/storage'
 import './index.css'
 
 export default function App() {
   const [progress, setProgress] = useState<Progress>(() => loadProgress())
   const [current, setCurrent] = useState<{ moduleId: string; lessonId: string } | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => loadTheme())
 
   useEffect(() => { saveProgress(progress) }, [progress])
   useEffect(() => { window.scrollTo(0, 0) }, [current])
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    saveTheme(theme)
+  }, [theme])
 
   const navigate = (moduleId: string, lessonId: string) => setCurrent({ moduleId, lessonId })
 
@@ -36,6 +41,13 @@ export default function App() {
   return (
     <div className="app">
       <button className="menu-btn" onClick={() => setSidebarOpen(o => !o)}>☰ Sommaire</button>
+      <button
+        className="theme-btn"
+        title={theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
+        onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}
+      >
+        {theme === 'dark' ? '☀' : '☾'}
+      </button>
       <Sidebar
         current={current}
         onNavigate={navigate}
