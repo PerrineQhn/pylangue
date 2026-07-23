@@ -74,3 +74,51 @@ export function saveTheme(t: 'dark' | 'light') {
     try { window.localStorage.setItem(THEME_KEY, t) } catch { /* ignore */ }
   }
 }
+
+// --- Transfert entre appareils (progression encodée dans l'URL) ---
+export function encodeProgress(p: Progress): string {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(p))))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+export function decodeProgress(s: string): Progress | null {
+  try {
+    const b64 = s.replace(/-/g, '+').replace(/_/g, '/')
+    return importProgress(decodeURIComponent(escape(atob(b64))))
+  } catch {
+    return null
+  }
+}
+
+export function mergeProgress(a: Progress, b: Progress): Progress {
+  const quizScores: Record<string, number> = { ...a.quizScores }
+  for (const [k, v] of Object.entries(b.quizScores)) {
+    quizScores[k] = Math.max(quizScores[k] ?? 0, v)
+  }
+  return {
+    completedLessons: [...new Set([...a.completedLessons, ...b.completedLessons])],
+    solvedExercises: [...new Set([...a.solvedExercises, ...b.solvedExercises])],
+    quizScores,
+  }
+}
+
+// --- Code de synchronisation cloud ---
+const SYNC_KEY = 'pylangue-sync-code'
+let syncCodeMemory = ''
+
+export function loadSyncCode(): string {
+  if (hasLS) {
+    try { return window.localStorage.getItem(SYNC_KEY) ?? '' } catch { /* ignore */ }
+  }
+  return syncCodeMemory
+}
+
+export function saveSyncCode(code: string) {
+  syncCodeMemory = code
+  if (hasLS) {
+    try {
+      if (code) window.localStorage.setItem(SYNC_KEY, code)
+      else window.localStorage.removeItem(SYNC_KEY)
+    } catch { /* ignore */ }
+  }
+}

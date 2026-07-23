@@ -1,0 +1,470 @@
+import type { Module } from '@/lib/types'
+
+export const m7: Module = {
+    id: 'm7',
+    tier: 2,
+    title: 'Un neurone, puis un réseau',
+    tagline: 'Régression logistique et descente de gradient from scratch : les mécanismes qui entraînent aussi GPT.',
+    status: 'ready',
+    lessons: [
+      {
+        id: 'm7l1',
+        title: 'Le neurone : produit scalaire + sigmoïde',
+        minutes: 35,
+        sections: [
+          {
+            kind: 'text',
+            md: `# L'unité de base de tout le deep learning
+
+Un « neurone » artificiel n'a rien de mystérieux : c'est un **produit scalaire suivi d'une fonction non linéaire**. Tu as déjà tous les ingrédients.
+
+## La prédiction
+
+Pour un vecteur d'entrée \`x\` (par exemple : les features d'une critique de film), des poids \`w\` et un biais \`b\` :
+
+\`\`\`
+z = w @ x + b          # le "logit" : un score brut, de -inf à +inf
+p = sigmoid(z)         # une probabilité, entre 0 et 1
+\`\`\`
+
+La **sigmoïde** écrase le score en probabilité :
+
+\`\`\`
+sigmoid(z) = 1 / (1 + exp(-z))
+\`\`\`
+
+- \`z\` très négatif → p ≈ 0 (classe « négatif »)
+- \`z = 0\` → p = 0.5 (incertitude totale)
+- \`z\` très positif → p ≈ 1 (classe « positif »)
+
+## Ce que "apprendre" veut dire
+
+Les poids \`w\` encodent l'importance de chaque feature : un poids positif pour « excellent », négatif pour « ennuyeux ». *Apprendre = trouver les bons poids* — c'est l'objet de la leçon suivante. Pour l'instant, on construit la machine à prédire.
+
+> Un LLM entier n'est que ce motif répété : des produits matriciels (des milliards de « neurones ») entrecoupés de non-linéarités. La sortie finale — softmax sur le vocabulaire — est la cousine multiclasse de cette sigmoïde.`,
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm7l1e1',
+              title: 'Construire le neurone',
+              instructions: `Implémente en NumPy :
+
+1. \`sigmoid(z)\` — doit fonctionner sur un scalaire **ou** un array (np.exp est vectorisé, profites-en),
+2. \`predire_proba(X, w, b)\` — pour une matrice \`X\` de shape \`(n, d)\` (n exemples, d features) : renvoie les \`n\` probabilités, soit \`sigmoid(X @ w + b)\`,
+3. \`predire_classe(X, w, b)\` — renvoie 1 quand la probabilité dépasse 0.5, sinon 0 (astuce : \`(probas >= 0.5).astype(int)\`).`,
+              starterCode: `import numpy as np
+
+def sigmoid(z):
+    ...
+
+def predire_proba(X, w, b):
+    ...
+
+def predire_classe(X, w, b):
+    ...
+
+# 3 critiques, 2 features : [nb mots positifs, nb mots négatifs]
+X = np.array([[3.0, 0.0], [0.0, 2.0], [1.0, 1.0]])
+w = np.array([1.5, -1.5])   # poids "sensés" fixés à la main
+b = 0.0
+print(predire_proba(X, w, b).round(3))
+print(predire_classe(X, w, b))`,
+              solution: `import numpy as np
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+def predire_proba(X, w, b):
+    return sigmoid(X @ w + b)
+
+def predire_classe(X, w, b):
+    return (predire_proba(X, w, b) >= 0.5).astype(int)
+
+X = np.array([[3.0, 0.0], [0.0, 2.0], [1.0, 1.0]])
+w = np.array([1.5, -1.5])
+b = 0.0
+print(predire_proba(X, w, b).round(3))
+print(predire_classe(X, w, b))`,
+              tests: `import numpy as np
+assert abs(sigmoid(0) - 0.5) < 1e-9, "sigmoid(0) = 0.5"
+assert sigmoid(100) > 0.999 and sigmoid(-100) < 0.001, "Saturation aux extrêmes"
+_z = sigmoid(np.array([-1.0, 0.0, 1.0]))
+assert _z.shape == (3,), "sigmoid doit être vectorisée (marcher sur un array)"
+_X = np.array([[3.0, 0.0], [0.0, 2.0], [1.0, 1.0]])
+_w = np.array([1.5, -1.5])
+_p = predire_proba(_X, _w, 0.0)
+assert _p.shape == (3,), "Une probabilité par exemple"
+assert _p[0] > 0.9, "3 mots positifs, 0 négatif : probabilité haute"
+assert _p[1] < 0.1, "0 positif, 2 négatifs : probabilité basse"
+assert list(predire_classe(_X, _w, 0.0)) == [1, 0, 1], "Seuil à 0.5 (1-1 avec poids symétriques donne z=0, p=0.5 -> classe 1)"
+print("TESTS_PASS")`,
+              hints: [
+                'sigmoid : littéralement 1 / (1 + np.exp(-z)) — np.exp gère scalaires et arrays.',
+                'X @ w donne un vecteur de n logits ; + b se diffuse tout seul (broadcasting).',
+                '(probas >= 0.5) donne des booléens ; .astype(int) les convertit en 0/1.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'quiz',
+            questions: [
+              {
+                question: 'Que représente le logit z = w @ x + b avant la sigmoïde ?',
+                options: [
+                  'Une probabilité',
+                  'Un score brut non borné : son signe donne la classe penchée, sa magnitude la confiance',
+                  'Le gradient',
+                  'Le taux d\'erreur',
+                ],
+                correct: 1,
+                explanation: 'Les LLM aussi produisent des logits (un par token du vocabulaire) que softmax convertit en probabilités. Le mot "logits" que tu vois dans les API vient exactement d\'ici.',
+              },
+              {
+                question: 'Pourquoi une non-linéarité (sigmoïde, ReLU…) est-elle indispensable dans un réseau ?',
+                options: [
+                  'Pour ralentir l\'entraînement',
+                  'Sans elle, empiler des couches linéaires équivaut à UNE seule couche linéaire : le réseau ne peut rien apprendre de complexe',
+                  'Pour économiser de la mémoire',
+                  'C\'est une convention historique sans importance',
+                ],
+                correct: 1,
+                explanation: 'La composition de fonctions linéaires est linéaire : W2(W1x) = (W2W1)x. Les non-linéarités entre les couches sont ce qui donne aux réseaux profonds — et aux transformers — leur pouvoir d\'expression.',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'm7l2',
+        title: 'La descente de gradient, à la main',
+        minutes: 40,
+        sections: [
+          {
+            kind: 'text',
+            md: `# Comment un modèle apprend
+
+L'entraînement de *tous* les modèles — de la régression logistique à GPT — suit la même boucle :
+
+1. **Prédire** avec les poids actuels,
+2. **Mesurer l'erreur** avec une fonction de perte (*loss*),
+3. **Calculer le gradient** : dans quelle direction bouger chaque poids pour réduire la perte,
+4. **Mettre à jour** : \`w = w - lr * gradient\` (lr = *learning rate*),
+5. Recommencer.
+
+## La perte : entropie croisée binaire
+
+Pour des probabilités \`p\` et des étiquettes \`y\` (0 ou 1) :
+
+\`\`\`
+loss = -moyenne( y*log(p) + (1-y)*log(1-p) )
+\`\`\`
+
+Elle punit sévèrement une prédiction *confiante et fausse* (log(petit) → très négatif). C'est la même famille de perte que celle qui entraîne les LLM (entropie croisée sur le prochain token).
+
+## Le gradient (offert, pour cette fois)
+
+Pour la régression logistique, le calcul donne des formules remarquablement simples :
+
+\`\`\`
+erreur = p - y                        # vecteur (n,)
+grad_w = X.T @ erreur / n             # (d,)
+grad_b = erreur.mean()                # scalaire
+\`\`\`
+
+L'intuition : chaque poids est corrigé proportionnellement à *(l'erreur) × (la feature qui y a contribué)*. En pratique, PyTorch calcule ces gradients automatiquement (\`loss.backward()\`) — mais les avoir écrits une fois à la main change ta compréhension de tout le reste.`,
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm7l2e1',
+              title: 'Entraîner un classifieur de sentiment',
+              instructions: `Le starter fournit \`sigmoid\` et un mini-dataset (features : [mots positifs, mots négatifs, longueur]). Implémente :
+
+1. \`perte(p, y)\` — l'entropie croisée binaire (utilise \`np.clip(p, 1e-10, 1 - 1e-10)\` avant les log pour éviter log(0)),
+2. \`une_etape(X, y, w, b, lr)\` — calcule \`p\`, puis les gradients (formules ci-dessus), et renvoie les **nouveaux** \`(w, b)\`,
+3. \`entrainer(X, y, epochs=300, lr=0.5)\` — initialise \`w\` à zéros et \`b\` à 0.0, boucle, et renvoie \`(w, b)\`.
+
+Les tests vérifient que la perte diminue et que le modèle classe correctement le dataset.`,
+              starterCode: `import numpy as np
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+# [mots_positifs, mots_negatifs, longueur/10]
+X = np.array([[3, 0, 1.2], [2, 1, 0.8], [0, 3, 1.0], [1, 2, 1.5],
+              [4, 1, 2.0], [0, 2, 0.5], [3, 1, 1.0], [1, 3, 1.2]], dtype=float)
+y = np.array([1, 1, 0, 0, 1, 0, 1, 0], dtype=float)
+
+def perte(p, y):
+    ...
+
+def une_etape(X, y, w, b, lr):
+    ...
+
+def entrainer(X, y, epochs=300, lr=0.5):
+    ...
+
+w, b = entrainer(X, y)
+p_final = sigmoid(X @ w + b)
+print("poids appris :", w.round(2), "biais :", round(b, 2))
+print("perte finale :", round(perte(p_final, y), 4))`,
+              solution: `import numpy as np
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+X = np.array([[3, 0, 1.2], [2, 1, 0.8], [0, 3, 1.0], [1, 2, 1.5],
+              [4, 1, 2.0], [0, 2, 0.5], [3, 1, 1.0], [1, 3, 1.2]], dtype=float)
+y = np.array([1, 1, 0, 0, 1, 0, 1, 0], dtype=float)
+
+def perte(p, y):
+    p = np.clip(p, 1e-10, 1 - 1e-10)
+    return -np.mean(y * np.log(p) + (1 - y) * np.log(1 - p))
+
+def une_etape(X, y, w, b, lr):
+    p = sigmoid(X @ w + b)
+    erreur = p - y
+    grad_w = X.T @ erreur / len(y)
+    grad_b = erreur.mean()
+    return w - lr * grad_w, b - lr * grad_b
+
+def entrainer(X, y, epochs=300, lr=0.5):
+    w = np.zeros(X.shape[1])
+    b = 0.0
+    for _ in range(epochs):
+        w, b = une_etape(X, y, w, b, lr)
+    return w, b
+
+w, b = entrainer(X, y)
+p_final = sigmoid(X @ w + b)
+print("poids appris :", w.round(2), "biais :", round(b, 2))
+print("perte finale :", round(perte(p_final, y), 4))`,
+              tests: `import numpy as np
+_p = np.array([0.9, 0.1])
+_y = np.array([1.0, 0.0])
+assert perte(_p, _y) < 0.2, "Bonnes prédictions : perte faible"
+assert perte(np.array([0.1]), np.array([1.0])) > 1.5, "Prédiction confiante et fausse : perte élevée"
+assert np.isfinite(perte(np.array([0.0, 1.0]), np.array([1.0, 0.0]))), "p=0 ou 1 ne doit pas donner inf — pense à np.clip"
+_w0 = np.zeros(3)
+_w1, _b1 = une_etape(X, y, _w0, 0.0, 0.5)
+_l0 = perte(sigmoid(X @ _w0 + 0.0), y)
+_l1 = perte(sigmoid(X @ _w1 + _b1), y)
+assert _l1 < _l0, "Une étape de gradient doit faire baisser la perte"
+_w, _b = entrainer(X, y)
+_pred = (sigmoid(X @ _w + _b) >= 0.5).astype(int)
+assert (_pred == y.astype(int)).all(), "Après entraînement, les 8 exemples doivent être bien classés"
+assert _w[0] > 0 and _w[1] < 0, "Le modèle doit apprendre : mots positifs -> poids positif, mots négatifs -> poids négatif"
+print("TESTS_PASS")`,
+              hints: [
+                'perte : np.clip d\'abord, puis -np.mean(y * np.log(p) + (1 - y) * np.log(1 - p)).',
+                'une_etape suit mot à mot les formules du cours : erreur = p - y, grad_w = X.T @ erreur / n.',
+                'entrainer : w = np.zeros(X.shape[1]), puis une boucle qui réaffecte w, b = une_etape(...).',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'quiz',
+            questions: [
+              {
+                question: 'Que fait concrètement w = w - lr * grad_w ?',
+                options: [
+                  'Elle remet les poids à zéro',
+                  'Elle déplace chaque poids d\'un petit pas dans la direction qui réduit la perte',
+                  'Elle normalise les poids',
+                  'Elle ajoute du bruit aléatoire',
+                ],
+                correct: 1,
+                explanation: 'Le gradient pointe vers la montée de la perte ; on va dans le sens opposé, à petits pas (lr). GPT-4 a été entraîné exactement ainsi — avec des optimiseurs plus raffinés (Adam), mais le principe est celui-ci.',
+              },
+              {
+                question: 'Que risque-t-il de se passer avec un learning rate beaucoup trop grand ?',
+                options: [
+                  'L\'entraînement est juste plus rapide',
+                  'La perte oscille ou diverge : les pas sont si grands qu\'on saute par-dessus le minimum',
+                  'Rien, le lr n\'a pas d\'importance',
+                  'Le modèle apprend par cœur',
+                ],
+                correct: 1,
+                explanation: 'Le lr est L\'hyperparamètre le plus sensible de tout le deep learning. Trop petit : interminable. Trop grand : divergence. D\'où les "lr schedules" (warmup, décroissance) mentionnés dans tous les papiers de LLM.',
+              },
+              {
+                question: 'Quel est le lien entre cette leçon et l\'entraînement d\'un LLM ?',
+                options: [
+                  'Aucun, les LLM utilisent une autre méthode',
+                  'Identique dans le principe : entropie croisée + descente de gradient — sur des milliards de poids et de tokens',
+                  'Les LLM n\'ont pas de fonction de perte',
+                  'Les LLM sont entraînés sans données',
+                ],
+                correct: 1,
+                explanation: 'Un LLM minimise l\'entropie croisée de sa prédiction du prochain token, par descente de gradient (via backpropagation automatique). Tu viens d\'écrire la version minimale exacte de ce processus.',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'm7l3',
+        title: 'Généralisation : le split train/test',
+        minutes: 35,
+        sections: [
+          {
+            kind: 'text',
+            md: `# Le péché originel du ML : s'évaluer sur ses données d'entraînement
+
+Ton classifieur du module précédent classe parfaitement… *les exemples sur lesquels il s'est entraîné*. Mais un modèle qui a mémorisé n'a rien appris : ce qui compte, c'est sa performance sur des données **jamais vues**. C'est LA distinction fondamentale : apprentissage vs **généralisation**.
+
+## Le protocole minimal
+
+\`\`\`
+1. Mélanger les données (avec une graine fixée : reproductibilité)
+2. Découper : ~80 % train / ~20 % test
+3. Entraîner sur train UNIQUEMENT
+4. Mesurer l'accuracy sur test — le seul chiffre qui compte
+\`\`\`
+
+## Lire l'écart train/test
+
+- \`train ≈ test\`, tous deux bons → le modèle généralise ✓
+- \`train ≫ test\` → **overfitting** : le modèle a mémorisé du bruit. Remèdes : plus de données, modèle plus simple, régularisation.
+- \`train\` déjà mauvais → **underfitting** : le modèle est trop simple pour le problème.
+
+## Le mélange : une étape critique
+
+Si tes données sont ordonnées (tous les positifs puis tous les négatifs — très courant !), un découpage sans mélange met *toutes* les classes d'un côté. \`rng.permutation(n)\` génère des indices mélangés ; on indexe X et y avec **les mêmes** indices pour garder l'alignement exemple↔étiquette.
+
+> Ce protocole s'applique tel quel aux LLM : les jeux d'évaluation (module 13) doivent être disjoints des données de fine-tuning, et la *contamination* des benchmarks par les données d'entraînement est un problème majeur du domaine.`,
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm7l3e1',
+              title: 'Protocole d\'évaluation complet',
+              instructions: `Le starter fournit le classifieur du module 7 (entraînement compris). Implémente :
+
+1. \`split_train_test(X, y, part_test, graine)\` — mélange avec \`np.random.RandomState(graine).permutation(len(y))\`, puis découpe : les premiers \`n_test = int(len(y) * part_test)\` indices pour le test, le reste pour le train. Renvoie \`(X_train, y_train, X_test, y_test)\`,
+2. \`accuracy(y_vrai, y_pred)\` — la fraction d'étiquettes correctes,
+3. \`protocole(X, y)\` — split (20 % test, graine 42), entraîne sur le train, renvoie \`{"train": acc_train, "test": acc_test}\`.`,
+              starterCode: `import numpy as np
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+def entrainer(X, y, epochs=300, lr=0.5):
+    w, b = np.zeros(X.shape[1]), 0.0
+    for _ in range(epochs):
+        p = sigmoid(X @ w + b)
+        w -= lr * (X.T @ (p - y)) / len(y)
+        b -= lr * (p - y).mean()
+    return w, b
+
+def predire(X, w, b):
+    return (sigmoid(X @ w + b) >= 0.5).astype(int)
+
+# Dataset jouet : 20 exemples, séparables par la 1re feature
+rng = np.random.RandomState(0)
+X = rng.randn(20, 2)
+y = (X[:, 0] > 0).astype(float)
+
+def split_train_test(X, y, part_test=0.2, graine=42):
+    ...
+
+def accuracy(y_vrai, y_pred):
+    ...
+
+def protocole(X, y):
+    ...
+
+print(protocole(X, y))`,
+              solution: `import numpy as np
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+def entrainer(X, y, epochs=300, lr=0.5):
+    w, b = np.zeros(X.shape[1]), 0.0
+    for _ in range(epochs):
+        p = sigmoid(X @ w + b)
+        w -= lr * (X.T @ (p - y)) / len(y)
+        b -= lr * (p - y).mean()
+    return w, b
+
+def predire(X, w, b):
+    return (sigmoid(X @ w + b) >= 0.5).astype(int)
+
+rng = np.random.RandomState(0)
+X = rng.randn(20, 2)
+y = (X[:, 0] > 0).astype(float)
+
+def split_train_test(X, y, part_test=0.2, graine=42):
+    indices = np.random.RandomState(graine).permutation(len(y))
+    n_test = int(len(y) * part_test)
+    test, train = indices[:n_test], indices[n_test:]
+    return X[train], y[train], X[test], y[test]
+
+def accuracy(y_vrai, y_pred):
+    return float((y_vrai.astype(int) == y_pred.astype(int)).mean())
+
+def protocole(X, y):
+    X_tr, y_tr, X_te, y_te = split_train_test(X, y, 0.2, 42)
+    w, b = entrainer(X_tr, y_tr)
+    return {"train": accuracy(y_tr, predire(X_tr, w, b)),
+            "test": accuracy(y_te, predire(X_te, w, b))}
+
+print(protocole(X, y))`,
+              tests: `import numpy as np
+_Xt, _yt, _Xe, _ye = split_train_test(X, y, 0.2, 42)
+assert len(_ye) == 4 and len(_yt) == 16, "20 exemples : 4 en test (20 %), 16 en train"
+assert _Xt.shape == (16, 2) and _Xe.shape == (4, 2), "X découpé avec les mêmes indices que y"
+_Xt2, _yt2, _, _ = split_train_test(X, y, 0.2, 42)
+assert np.allclose(_Xt, _Xt2), "Même graine : même découpage (reproductibilité)"
+_, _, _Xe3, _ = split_train_test(X, y, 0.2, 7)
+assert not np.allclose(_Xe, _Xe3), "Graine différente : découpage différent"
+# L'alignement X/y doit être préservé par le mélange
+for _i in range(4):
+    assert _ye[_i] == (float(_Xe[_i, 0] > 0)), "Chaque étiquette doit rester alignée avec son exemple !"
+assert accuracy(np.array([1.0, 0.0, 1.0]), np.array([1, 0, 0])) == 2/3, "2 corrects sur 3"
+_r = protocole(X, y)
+assert _r["test"] >= 0.75, "Sur ce problème séparable, le test doit être bien classé"
+print("TESTS_PASS")`,
+              hints: [
+                'permutation(len(y)) donne des indices mélangés ; X[indices] et y[indices] les appliquent aux DEUX tableaux.',
+                'test = indices[:n_test], train = indices[n_test:] — puis X[train], y[train], X[test], y[test].',
+                'Si le test d\'alignement échoue : tu as mélangé X et y avec des indices différents.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'quiz',
+            questions: [
+              {
+                question: 'Accuracy train = 99 %, test = 61 %. Diagnostic ?',
+                options: [
+                  'Le modèle est excellent',
+                  'Overfitting : le modèle a mémorisé le train et généralise mal — le chiffre honnête est 61 %',
+                  'Underfitting',
+                  'Le jeu de test est trop facile',
+                ],
+                correct: 1,
+                explanation: 'L\'écart train/test est le thermomètre de la mémorisation. Ne JAMAIS communiquer le score de train comme performance du modèle — c\'est l\'erreur de débutant la plus répandue du ML.',
+              },
+              {
+                question: 'Qu\'est-ce que la "contamination" des benchmarks LLM ?',
+                options: [
+                  'Des virus dans les datasets',
+                  'Les questions du benchmark figuraient dans les données d\'entraînement du modèle : son score mesure la mémorisation, pas la capacité',
+                  'Des erreurs d\'annotation',
+                  'Un problème d\'encodage',
+                ],
+                correct: 1,
+                explanation: 'C\'est exactement le principe train/test à l\'échelle des LLM : un modèle qui a "vu" MMLU pendant son pré-entraînement a un score gonflé. D\'où les benchmarks privés et les jeux d\'éval maison — toujours postérieurs ou privés.',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }

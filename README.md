@@ -1,6 +1,6 @@
 # PyLangue
 
-**Apprendre Python à travers le NLP et les LLM** — un parcours interactif complet (13 modules, 26 leçons) où chaque concept Python est enseigné via un vrai problème de traitement du langage : de la première chaîne de caractères jusqu'au bloc transformer complet en NumPy, au RAG de bout en bout et à la boucle agentique.
+**Apprendre Python à travers le NLP et les LLM** — un parcours interactif complet (13 modules, 39 leçons) où chaque concept Python est enseigné via un vrai problème de traitement du langage : de la première chaîne de caractères jusqu'au bloc transformer complet en NumPy, au RAG de bout en bout et à la boucle agentique.
 
 **Essayer en ligne → [perrineqhn.github.io/pylangue](https://perrineqhn.github.io/pylangue/)**
 
@@ -52,7 +52,8 @@ Chaque leçon combine explications, exemples exécutables et modifiables, exerci
 - **Validation automatique** des exercices par tests unitaires, avec messages d'erreur pédagogiques
 - **Indices progressifs** et solution de référence débloquée après réussite
 - **Quiz** avec explications détaillées pour chaque réponse
-- **Suivi de progression** sauvegardé dans le navigateur (localStorage), export/import JSON
+- **Suivi de progression** sauvegardé dans le navigateur, transfert entre appareils par lien/QR code, export/import JSON
+- **Synchronisation cloud optionnelle** par code personnel (voir [SYNC_SETUP.md](SYNC_SETUP.md))
 - **Responsive** : utilisable sur ordinateur, tablette et mobile
 - **Un seul fichier HTML** : fonctionne aussi hors ligne en local (après le premier chargement de Pyodide)
 
@@ -75,7 +76,8 @@ Structure du code :
 
 ```
 src/
-├── data/tier{1,2,3}.ts    # tout le contenu pédagogique (leçons, exercices, tests, quiz)
+├── data/modules/m*.ts     # le contenu pédagogique, un fichier par module
+├── data/tier{1,2,3}.ts    # agrégateurs par palier
 ├── hooks/usePyodide.ts    # chargement et exécution Python (CDN avec fallback)
 ├── components/            # Sidebar, Home, LessonView, CodeRunner, QuizBlock
 └── lib/                   # types, rendu markdown, coloration syntaxique, persistance

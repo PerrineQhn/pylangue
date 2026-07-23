@@ -573,3 +573,39 @@ body {
   .module-card:not(.card-outline):hover { transform: none; }
   .editor-highlight, .code-editor { font-size: 16px; line-height: 1.55; }
 }
+
+/* ---------- Transfert entre appareils & toast ---------- */
+.toast {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 50; padding: 11px 20px; border-radius: 99px;
+  background: var(--glass-strong); color: var(--ok);
+  border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent);
+  font-size: 14px; font-weight: 650;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-card), 0 0 24px color-mix(in srgb, var(--ok) 15%, transparent);
+  animation: toast-in 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, -12px); } }
+
+.transfer-panel {
+  margin-top: 14px; padding: 18px 20px;
+  background: var(--glass); border: 1px solid var(--border-strong);
+  border-radius: 14px; backdrop-filter: blur(12px);
+}
+.transfer-title { font-size: 15px; font-weight: 750; color: var(--text); margin-bottom: 6px; }
+.transfer-help { font-size: 13px; color: var(--text-soft); margin: 0 0 14px; line-height: 1.6; }
+.transfer-body { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.transfer-qr {
+  flex-shrink: 0; padding: 10px; background: #ffffff; border-radius: 10px;
+  min-width: 60px; min-height: 60px;
+}
+.transfer-qr:empty { display: none; }
+.transfer-link-zone { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 8px; }
+.transfer-input {
+  width: 100%; font-family: var(--mono); font-size: 11.5px;
+  padding: 9px 12px; border-radius: var(--radius-sm);
+  background: var(--code-bg); color: var(--text-soft);
+  border: 1px solid var(--border-strong);
+}
+.transfer-input:focus { outline: none; border-color: var(--brand); }
+.transfer-link-zone .btn { align-self: flex-start; }
