@@ -63,12 +63,20 @@ export function usePyodide() {
 
   const run = useCallback(async (code: string, opts?: { needsNumpy?: boolean }): Promise<RunResult> => {
     const py = await getPyodide()
+    // Filet de sécurité explicite (drapeau posé dans le contenu)…
     if (opts?.needsNumpy && !numpyLoaded.current) {
       setStatusMsg('Chargement de numpy…')
       await py.loadPackage('numpy')
       numpyLoaded.current = true
       setStatusMsg('')
     }
+    // …ET détection automatique : Pyodide scanne les imports du code
+    // et charge les paquets de sa distribution qui manquent (numpy, etc.).
+    try {
+      setStatusMsg('Vérification des dépendances…')
+      await py.loadPackagesFromImports(code)
+    } catch { /* import inconnu : l'erreur claire sortira à l'exécution */ }
+    setStatusMsg('')
     let out = ''
     py.setStdout({ batched: (s: string) => { out += s + '\n' } })
     py.setStderr({ batched: (s: string) => { out += s + '\n' } })
