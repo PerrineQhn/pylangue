@@ -42,9 +42,26 @@ majs  = [t.upper() for t in tokens]            # transformer
 ids   = [vocab[t] for t in tokens if t in vocab]  # les deux
 \`\`\`
 
+## La syntaxe complète des comprehensions
+
+\`\`\`
+[expression for element in iterable]                  # transformer
+[expression for element in iterable if condition]     # transformer + filtrer
+{cle: valeur for element in iterable}                 # dict comprehension
+{expression for element in iterable}                  # set comprehension
+\`\`\`
+
+Les deux dernières sont moins connues et pourtant précieuses en NLP : \`{mot: len(mot) for mot in tokens}\` construit un index en une ligne, \`{t.lower() for t in tokens}\` déduplique en normalisant.
+
 ## Stopwords : filtrer le bruit
 
-Les mots très fréquents mais peu informatifs (« le », « de », « et »…) sont appelés **stopwords**. Les retirer est une étape classique en recherche d'information — même si les LLM modernes, eux, gardent tout : leur tokenizer ne jette rien, c'est le mécanisme d'attention qui apprend à pondérer.`,
+Les mots très fréquents mais peu informatifs (« le », « de », « et »…) sont appelés **stopwords**. Les retirer est une étape classique en recherche d'information — même si les LLM modernes, eux, gardent tout : leur tokenizer ne jette rien, c'est le mécanisme d'attention qui apprend à pondérer.
+
+## Pièges classiques
+
+- **La comprehension illisible** : au-delà de deux \`for\` ou d'une condition complexe, reviens à une boucle claire. La lisibilité prime — ton code sera relu (par les autres et par toi dans 6 mois).
+- **Modifier une liste en la parcourant** : ne fais jamais \`tokens.remove(...)\` dans un \`for t in tokens\` — construis une nouvelle liste filtrée à la place. C'est exactement ce que fait la comprehension avec \`if\`.
+- **Fonction sans return** : elle renvoie \`None\` silencieusement, et l'erreur explose trois lignes plus loin chez l'appelant.`,
           },
           {
             kind: 'exercise',
@@ -78,6 +95,104 @@ print("TESTS_PASS")`,
               hints: [
                 't.strip(".,!?") retire ces caractères au début et à la fin du token.',
                 'Un "!" isolé devient une chaîne vide après strip — le test "if t" l\'élimine (chaîne vide = False).',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm2l1e2',
+              title: "Dict et set comprehensions à l'œuvre",
+              instructions: `Deux outils d'indexation en une ligne chacun :
+
+1. \`longueurs(tokens)\` — un dict \`token → longueur\` (dict comprehension ; les doublons s'écrasent, c'est voulu),
+2. \`compter_par_longueur(tokens)\` — un dict \`longueur → nombre de tokens de cette longueur\` (le motif de comptage, mais avec des clés numériques),
+3. \`vocabulaire_normalise(tokens)\` — le **set** des tokens en minuscules.`,
+              starterCode: `def longueurs(tokens):
+    ...
+
+def compter_par_longueur(tokens):
+    ...
+
+def vocabulaire_normalise(tokens):
+    ...
+
+tokens = ["Le", "chat", "dort", "le", "CHAT"]
+print(longueurs(tokens))
+print(compter_par_longueur(tokens))
+print(vocabulaire_normalise(tokens))`,
+              solution: `def longueurs(tokens):
+    return {t: len(t) for t in tokens}
+
+def compter_par_longueur(tokens):
+    comptes = {}
+    for t in tokens:
+        comptes[len(t)] = comptes.get(len(t), 0) + 1
+    return comptes
+
+def vocabulaire_normalise(tokens):
+    return {t.lower() for t in tokens}
+
+tokens = ["Le", "chat", "dort", "le", "CHAT"]
+print(longueurs(tokens))
+print(compter_par_longueur(tokens))
+print(vocabulaire_normalise(tokens))`,
+              tests: `assert longueurs(["ia", "nlp"]) == {"ia": 2, "nlp": 3}, "token → longueur"
+assert longueurs([]) == {}, "Liste vide : dict vide"
+assert compter_par_longueur(["ia", "le", "nlp"]) == {2: 2, 3: 1}, "2 tokens de longueur 2, 1 de longueur 3"
+assert vocabulaire_normalise(["Le", "le", "CHAT"]) == {"le", "chat"}, "Un set : unicité après normalisation"
+assert vocabulaire_normalise([]) == set(), "Liste vide : set vide"
+print("TESTS_PASS")`,
+              hints: [
+                'longueurs : {t: len(t) for t in tokens} — c\'est tout.',
+                'compter_par_longueur : le motif get(clé, 0) + 1, avec len(t) comme clé.',
+                'vocabulaire_normalise : accolades sans les deux-points = set comprehension.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm2l1e3',
+              title: "Défi — Vecteur de features d'un texte",
+              instructions: `Avant les embeddings, on décrivait un texte par des *features* calculées à la main — et on le fait encore pour les baselines et le monitoring. Écris \`extraire_features(texte, stopwords)\` qui renvoie :
+
+- \`"nb_tokens"\` : nombre total de tokens (minuscules, split),
+- \`"nb_informatifs"\` : tokens hors stopwords,
+- \`"ratio_informatif"\` : informatifs / total, arrondi à 2 décimales (\`0.0\` si vide),
+- \`"longueur_max"\` : longueur du plus long token (\`0\` si vide).
+
+Une seule contrainte de style : utilise au moins une comprehension.`,
+              starterCode: `STOP = {"le", "la", "les", "de", "et", "un", "une"}
+
+def extraire_features(texte, stopwords):
+    ...
+
+print(extraire_features("Le chat et le chien de la maison", STOP))`,
+              solution: `STOP = {"le", "la", "les", "de", "et", "un", "une"}
+
+def extraire_features(texte, stopwords):
+    tokens = texte.lower().split()
+    informatifs = [t for t in tokens if t not in stopwords]
+    return {
+        "nb_tokens": len(tokens),
+        "nb_informatifs": len(informatifs),
+        "ratio_informatif": round(len(informatifs) / len(tokens), 2) if tokens else 0.0,
+        "longueur_max": max((len(t) for t in tokens), default=0),
+    }
+
+print(extraire_features("Le chat et le chien de la maison", STOP))`,
+              tests: `_f = extraire_features("Le chat et le chien de la maison", STOP)
+assert _f["nb_tokens"] == 8, "8 tokens au total"
+assert _f["nb_informatifs"] == 3, "chat, chien, maison"
+assert _f["ratio_informatif"] == round(3 / 8, 2), "Ratio arrondi à 2 décimales"
+assert _f["longueur_max"] == 6, "'maison' fait 6 caractères"
+_v = extraire_features("", STOP)
+assert _v == {"nb_tokens": 0, "nb_informatifs": 0, "ratio_informatif": 0.0, "longueur_max": 0}, "Texte vide : tout à zéro"
+print("TESTS_PASS")`,
+              hints: [
+                'Une comprehension filtre les informatifs ; le reste est du comptage.',
+                'max(..., default=0) évite l\'erreur sur une séquence vide.',
               ],
             },
           },
@@ -137,7 +252,28 @@ class Tokenizer:
 
 ## Le token inconnu : \`<unk>\`
 
-Que faire d'un mot jamais vu à l'entraînement ? Les vocabulaires réels réservent un id spécial \`<unk>\` (unknown). Les tokenizers modernes (BPE, module 8) contournent le problème en découpant les mots inconnus en sous-mots — mais le concept de token spécial (\`<unk>\`, \`<pad>\`, \`<eos>\`…) reste central dans tous les LLM.`,
+Que faire d'un mot jamais vu à l'entraînement ? Les vocabulaires réels réservent un id spécial \`<unk>\` (unknown). Les tokenizers modernes (BPE, module 8) contournent le problème en découpant les mots inconnus en sous-mots — mais le concept de token spécial (\`<unk>\`, \`<pad>\`, \`<eos>\`…) reste central dans tous les LLM.
+
+## Les méthodes spéciales : parler le langage de Python
+
+Les méthodes encadrées de doubles underscores (*dunder*) branchent ta classe sur la syntaxe du langage :
+
+\`\`\`
+def __len__(self):          # active len(tokenizer)
+    return len(self.vocab)
+
+def __repr__(self):         # ce qui s'affiche avec print(tokenizer)
+    return f"Tokenizer(vocab={len(self.vocab)} tokens)"
+
+def __contains__(self, mot):  # active : "chat" in tokenizer
+    return mot in self.vocab
+\`\`\`
+
+C'est pour ça que \`len(dataset)\`, \`model in registry\` ou \`print(config)\` « marchent » sur les objets des bibliothèques ML : leurs auteurs ont implémenté ces méthodes. Les connaître, c'est savoir lire — et écrire — des API naturelles.
+
+## Robustesse : penser aux entrées hostiles
+
+Un vrai \`decode\` reçoit un jour un id qui n'existe pas (bug amont, fichier corrompu, version de vocab différente). Deux philosophies : lever une erreur claire, ou dégrader proprement vers \`<unk>\`. L'important est de **choisir explicitement** — le crash cryptique trois couches plus loin est la pire option.`,
           },
           {
             kind: 'exercise',
@@ -202,6 +338,148 @@ print("TESTS_PASS")`,
                 'Dans fit : if mot not in self.vocab: self.vocab[mot] = len(self.vocab).',
                 'Dans encode : self.vocab.get(mot, 0) gère les inconnus sans if.',
                 'Dans decode : {i: m for m, i in self.vocab.items()} inverse le dictionnaire.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm2l2e2',
+              title: "Un Tokenizer professionnel : dunder et robustesse",
+              instructions: `Le starter fournit le Tokenizer de l'exercice précédent, déjà rempli. Ajoute-lui :
+
+1. \`__len__(self)\` — la taille du vocabulaire (active \`len(tok)\`),
+2. \`__contains__(self, mot)\` — teste l'appartenance au vocab (active \`"chat" in tok\`),
+3. \`decode_robuste(self, ids)\` — comme decode, mais un id **inconnu** produit le texte \`<unk>\` au lieu de crasher (indice : \`inverse.get(i, "<unk>")\`).`,
+              starterCode: `class Tokenizer:
+    def __init__(self):
+        self.vocab = {"<unk>": 0}
+
+    def fit(self, texte):
+        for mot in texte.lower().split():
+            if mot not in self.vocab:
+                self.vocab[mot] = len(self.vocab)
+
+    def encode(self, texte):
+        return [self.vocab.get(m, 0) for m in texte.lower().split()]
+
+    # --- à toi de jouer ---
+    def __len__(self):
+        ...
+
+    def __contains__(self, mot):
+        ...
+
+    def decode_robuste(self, ids):
+        ...
+
+tok = Tokenizer()
+tok.fit("le chat dort")
+print(len(tok))
+print("chat" in tok, "dragon" in tok)
+print(tok.decode_robuste([1, 2, 99]))`,
+              solution: `class Tokenizer:
+    def __init__(self):
+        self.vocab = {"<unk>": 0}
+
+    def fit(self, texte):
+        for mot in texte.lower().split():
+            if mot not in self.vocab:
+                self.vocab[mot] = len(self.vocab)
+
+    def encode(self, texte):
+        return [self.vocab.get(m, 0) for m in texte.lower().split()]
+
+    def __len__(self):
+        return len(self.vocab)
+
+    def __contains__(self, mot):
+        return mot in self.vocab
+
+    def decode_robuste(self, ids):
+        inverse = {i: m for m, i in self.vocab.items()}
+        return " ".join(inverse.get(i, "<unk>") for i in ids)
+
+tok = Tokenizer()
+tok.fit("le chat dort")
+print(len(tok))
+print("chat" in tok, "dragon" in tok)
+print(tok.decode_robuste([1, 2, 99]))`,
+              tests: `_t = Tokenizer()
+_t.fit("le chat dort")
+assert len(_t) == 4, "len(tok) : <unk> + 3 mots = 4"
+assert "chat" in _t, "'chat' in tok doit fonctionner (méthode __contains__)"
+assert "dragon" not in _t, "'dragon' n'est pas dans le vocab"
+assert _t.decode_robuste([1, 2]) == "le chat", "Décodage normal"
+assert _t.decode_robuste([1, 99]) == "le <unk>", "Un id inconnu devient <unk> — pas de crash !"
+assert _t.decode_robuste([]) == "", "Liste vide : chaîne vide"
+print("TESTS_PASS")`,
+              hints: [
+                '__len__ et __contains__ délèguent simplement à self.vocab.',
+                'decode_robuste : construis le dict inverse, puis inverse.get(i, "<unk>") pour chaque id.',
+                '" ".join(...) d\'une liste vide donne "" — le cas vide est gratuit.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm2l2e3',
+              title: "Défi — Vocabulaire avec fréquence minimale",
+              instructions: `Les vrais vocabulaires écartent les mots trop rares (bruit, fautes de frappe) : c'est le paramètre \`min_freq\` qu'on retrouve dans tous les outils. Complète \`TokenizerFiltre\` :
+
+- \`fit(texte, freq_min=1)\` : compte d'abord TOUS les mots, puis n'ajoute au vocab que ceux apparaissant au moins \`freq_min\` fois (dans l'ordre de première apparition dans le texte),
+- \`encode(texte)\` : comme d'habitude, inconnus → 0.
+
+Deux passes sur les données : compter, puis construire — un motif extrêmement courant en préparation de données.`,
+              starterCode: `class TokenizerFiltre:
+    def __init__(self):
+        self.vocab = {"<unk>": 0}
+
+    def fit(self, texte, freq_min=1):
+        ...
+
+    def encode(self, texte):
+        return [self.vocab.get(m, 0) for m in texte.lower().split()]
+
+tok = TokenizerFiltre()
+tok.fit("le chat le chien le chat perdu", freq_min=2)
+print(tok.vocab)
+print(tok.encode("le chat perdu"))`,
+              solution: `class TokenizerFiltre:
+    def __init__(self):
+        self.vocab = {"<unk>": 0}
+
+    def fit(self, texte, freq_min=1):
+        mots = texte.lower().split()
+        comptes = {}
+        for m in mots:
+            comptes[m] = comptes.get(m, 0) + 1
+        for m in mots:
+            if comptes[m] >= freq_min and m not in self.vocab:
+                self.vocab[m] = len(self.vocab)
+
+    def encode(self, texte):
+        return [self.vocab.get(m, 0) for m in texte.lower().split()]
+
+tok = TokenizerFiltre()
+tok.fit("le chat le chien le chat perdu", freq_min=2)
+print(tok.vocab)
+print(tok.encode("le chat perdu"))`,
+              tests: `_t = TokenizerFiltre()
+_t.fit("le chat le chien le chat perdu", freq_min=2)
+assert _t.vocab == {"<unk>": 0, "le": 1, "chat": 2}, "Seuls 'le' (3x) et 'chat' (2x) passent le seuil de 2"
+assert _t.encode("le chat perdu") == [1, 2, 0], "'perdu' (1 occurrence) est devenu <unk>"
+_t2 = TokenizerFiltre()
+_t2.fit("a b a", freq_min=1)
+assert _t2.vocab == {"<unk>": 0, "a": 1, "b": 2}, "freq_min=1 : tout le monde entre, ordre de première apparition"
+_t3 = TokenizerFiltre()
+_t3.fit("x y z", freq_min=5)
+assert _t3.vocab == {"<unk>": 0}, "Seuil trop haut : vocab réduit à <unk>"
+print("TESTS_PASS")`,
+              hints: [
+                'Première passe : le motif de comptage. Deuxième passe : re-parcourir les mots DANS L\'ORDRE et filtrer sur comptes[m].',
+                'Le "m not in self.vocab" évite les doublons lors de la deuxième passe.',
               ],
             },
           },
@@ -272,7 +550,28 @@ Ajouter une étape = ajouter un élément à la liste. Tester une étape = teste
 
 ## Composer : fabriquer une fonction à partir de fonctions
 
-Plus fort : une fonction qui *renvoie* une fonction. \`composer([f, g, h])\` fabrique une nouvelle fonction équivalente à \`h(g(f(x)))\` — le pipeline devient un objet réutilisable qu'on passe où on veut.`,
+Plus fort : une fonction qui *renvoie* une fonction. \`composer([f, g, h])\` fabrique une nouvelle fonction équivalente à \`h(g(f(x)))\` — le pipeline devient un objet réutilisable qu'on passe où on veut.
+
+## Les closures : des fonctions configurées
+
+Quand une fonction interne utilise les variables de la fonction qui l'a créée, Python les « capture » — c'est une **closure** (fermeture). Ça permet de construire des *fabriques de fonctions* :
+
+\`\`\`
+def fabriquer_filtre(longueur_mini):
+    def filtre(tokens):
+        return [t for t in tokens if len(t) >= longueur_mini]
+    return filtre
+
+filtre_3 = fabriquer_filtre(3)     # une fonction configurée avec mini=3
+filtre_5 = fabriquer_filtre(5)     # une autre, indépendante
+\`\`\`
+
+Chaque fonction fabriquée « se souvient » de sa configuration, sans classe ni variable globale. C'est exactement le mécanisme derrière les décorateurs (module 4) et derrière beaucoup d'API de bibliothèques : \`partial\`, les schedulers d'entraînement, les transforms de torchvision…
+
+## Pièges classiques
+
+- \`return pipeline()\` au lieu de \`return pipeline\` : tu exécutes au lieu de renvoyer la fonction.
+- Modifier une variable capturée depuis la closure demande \`nonlocal\` — si tu en arrives là, une classe est souvent plus claire.`,
           },
           {
             kind: 'exercise',
@@ -344,6 +643,151 @@ print("TESTS_PASS")`,
                 'executer : une boucle qui réaffecte texte = etape(texte).',
                 'composer : def pipeline(texte): return executer(etapes, texte) — puis return pipeline (sans parenthèses !).',
                 'pipeline_standard = composer([minuscules, sans_ponctuation, espaces_propres]).',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm2l3e2',
+              title: "Fabriques de fonctions (closures)",
+              instructions: `Construis deux fabriques :
+
+1. \`fabriquer_filtre_longueur(mini)\` — renvoie une fonction \`f(tokens)\` qui garde les tokens de longueur ≥ \`mini\`,
+2. \`fabriquer_remplaceur(ancien, nouveau)\` — renvoie une fonction \`f(texte)\` qui remplace \`ancien\` par \`nouveau\`,
+3. utilise-les avec \`composer\` (fourni) pour créer \`pipeline\` : d'abord remplacer \`"‑"\` (tiret) par \`" "\`, puis découper (\`str.split\` fourni comme étape), puis filtrer les tokens de moins de 3 lettres.
+
+Note : chaque étape du pipeline reçoit la sortie de la précédente — ici str → str → liste → liste.`,
+              starterCode: `def composer(etapes):
+    def pipeline(x):
+        for e in etapes:
+            x = e(x)
+        return x
+    return pipeline
+
+def fabriquer_filtre_longueur(mini):
+    ...
+
+def fabriquer_remplaceur(ancien, nouveau):
+    ...
+
+decouper = str.split   # une méthode utilisée comme fonction !
+
+pipeline = composer([
+    fabriquer_remplaceur("-", " "),
+    decouper,
+    fabriquer_filtre_longueur(3),
+])
+print(pipeline("micro-service de auto-complétion en temps-réel"))`,
+              solution: `def composer(etapes):
+    def pipeline(x):
+        for e in etapes:
+            x = e(x)
+        return x
+    return pipeline
+
+def fabriquer_filtre_longueur(mini):
+    def filtre(tokens):
+        return [t for t in tokens if len(t) >= mini]
+    return filtre
+
+def fabriquer_remplaceur(ancien, nouveau):
+    def remplacer(texte):
+        return texte.replace(ancien, nouveau)
+    return remplacer
+
+decouper = str.split
+
+pipeline = composer([
+    fabriquer_remplaceur("-", " "),
+    decouper,
+    fabriquer_filtre_longueur(3),
+])
+print(pipeline("micro-service de auto-complétion en temps-réel"))`,
+              tests: `_f3 = fabriquer_filtre_longueur(3)
+assert callable(_f3), "La fabrique doit renvoyer une FONCTION"
+assert _f3(["a", "ab", "abc", "abcd"]) == ["abc", "abcd"], "Garde les tokens de longueur >= 3"
+_f5 = fabriquer_filtre_longueur(5)
+assert _f5(["abc", "abcde"]) == ["abcde"], "Chaque fonction fabriquée garde SA configuration"
+assert _f3(["abc"]) == ["abc"], "Les deux filtres sont indépendants"
+_r = fabriquer_remplaceur("a", "o")
+assert _r("chat") == "chot", "Remplacement configuré"
+_p = composer([fabriquer_remplaceur("-", " "), str.split, fabriquer_filtre_longueur(3)])
+assert _p("temps-réel ok") == ["temps", "réel"], "Le pipeline complet : remplacer, découper, filtrer ('ok' trop court)"
+print("TESTS_PASS")`,
+              hints: [
+                'Le schéma : def fabrique(config): / def interne(x): … utilise config … / return interne.',
+                'Sans parenthèses dans le return — on renvoie la fonction, on ne l\'appelle pas.',
+                'Chaque appel à la fabrique crée une closure indépendante avec sa propre config.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm2l3e3',
+              title: "Défi — Pipeline piloté par configuration",
+              instructions: `En production, le pipeline de chaque projet est décrit par une **config** (un dict, souvent chargé d'un YAML/JSON). Écris \`construire_pipeline(config)\` qui assemble dynamiquement les étapes selon les clés :
+
+- \`"minuscules": True\` → ajoute une étape \`str.lower\`,
+- \`"decouper": True\` → ajoute \`str.split\` (après minuscules !),
+- \`"min_longueur": n\` (si n > 0) → ajoute un filtre gardant les tokens de longueur ≥ n.
+
+Renvoie la fonction composée (utilise \`composer\` et \`fabriquer_filtre_longueur\`, fournis). Une config vide doit produire un pipeline identité.`,
+              starterCode: `def composer(etapes):
+    def pipeline(x):
+        for e in etapes:
+            x = e(x)
+        return x
+    return pipeline
+
+def fabriquer_filtre_longueur(mini):
+    def filtre(tokens):
+        return [t for t in tokens if len(t) >= mini]
+    return filtre
+
+def construire_pipeline(config):
+    ...
+
+p = construire_pipeline({"minuscules": True, "decouper": True, "min_longueur": 4})
+print(p("Le Transformer EST une architecture"))`,
+              solution: `def composer(etapes):
+    def pipeline(x):
+        for e in etapes:
+            x = e(x)
+        return x
+    return pipeline
+
+def fabriquer_filtre_longueur(mini):
+    def filtre(tokens):
+        return [t for t in tokens if len(t) >= mini]
+    return filtre
+
+def construire_pipeline(config):
+    etapes = []
+    if config.get("minuscules"):
+        etapes.append(str.lower)
+    if config.get("decouper"):
+        etapes.append(str.split)
+    if config.get("min_longueur", 0) > 0:
+        etapes.append(fabriquer_filtre_longueur(config["min_longueur"]))
+    return composer(etapes)
+
+p = construire_pipeline({"minuscules": True, "decouper": True, "min_longueur": 4})
+print(p("Le Transformer EST une architecture"))`,
+              tests: `_p = construire_pipeline({"minuscules": True, "decouper": True, "min_longueur": 4})
+assert _p("Le Transformer EST une architecture") == ["transformer", "architecture"], "Pipeline complet : minuscules, découpe, filtre"
+_p2 = construire_pipeline({"decouper": True})
+assert _p2("Un Deux") == ["Un", "Deux"], "Sans l'étape minuscules, la casse est préservée"
+_p3 = construire_pipeline({})
+assert _p3("Tel Quel") == "Tel Quel", "Config vide : pipeline identité"
+_p4 = construire_pipeline({"minuscules": True})
+assert _p4("ABC") == "abc", "Une seule étape"
+print("TESTS_PASS")`,
+              hints: [
+                'Construis une liste d\'étapes conditionnellement (config.get), puis composer(etapes).',
+                'str.lower et str.split sont des fonctions utilisables telles quelles.',
+                'composer([]) fonctionne déjà : la boucle ne fait rien, x ressort intact.',
               ],
             },
           },

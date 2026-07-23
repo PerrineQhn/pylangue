@@ -156,6 +156,90 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm1l1e2',
+              title: "Aperçu de texte pour logs et interfaces",
+              instructions: `Dans toute application réelle, on affiche des *aperçus* : les 30 premiers caractères d'un document dans une liste, le début d'un prompt dans les logs. Écris \`apercu(texte, n=30)\` qui :
+
+1. renvoie le texte **tel quel** s'il fait \`n\` caractères ou moins,
+2. sinon renvoie les \`n\` premiers caractères suivis du caractère \`…\` (un seul caractère, pas trois points).
+
+C'est du slicing pur — et une fonction que tu réécriras dans la moitié de tes projets.`,
+              starterCode: `def apercu(texte, n=30):
+    ...
+
+print(apercu("Les transformers ont révolutionné le NLP moderne.", 20))
+print(apercu("Court.", 20))`,
+              solution: `def apercu(texte, n=30):
+    if len(texte) <= n:
+        return texte
+    return texte[:n] + "…"
+
+print(apercu("Les transformers ont révolutionné le NLP moderne.", 20))
+print(apercu("Court.", 20))`,
+              tests: `assert apercu("abcdef", 3) == "abc…", "Texte trop long : n caractères + …"
+assert apercu("ab", 5) == "ab", "Texte assez court : inchangé"
+assert apercu("abcde", 5) == "abcde", "Exactement n caractères : pas de troncature"
+assert len(apercu("x" * 100, 10)) == 11, "10 caractères + le seul caractère …"
+assert apercu("Les transformers dominent", n=7) == "Les tra…", "Le slicing [:n] garde les n premiers"
+print("TESTS_PASS")`,
+              hints: [
+                'Compare len(texte) à n avant de découper.',
+                'texte[:n] garde les n premiers caractères ; ajoute "…" avec +.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm1l1e3',
+              title: "Défi — Préparer un message utilisateur pour l'API",
+              instructions: `Synthèse de la leçon, telle qu'on l'écrirait dans une vraie application : \`preparer_message(brut, max_mots=50)\` doit :
+
+1. retirer les espaces/sauts de ligne des extrémités,
+2. compacter tous les espaces multiples (astuce robuste : \`" ".join(brut.split())\`),
+3. si le message dépasse \`max_mots\` mots, ne garder que les \`max_mots\` premiers et ajouter \`" [tronqué]"\`,
+4. renvoyer le **tuple** \`(texte_final, nb_mots_conserves)\`.
+
+Ce garde-fou (nettoyer + borner l'entrée utilisateur) existe dans toutes les applications LLM sérieuses : il protège des prompts malformés et des coûts imprévus.`,
+              starterCode: `def preparer_message(brut, max_mots=50):
+    ...
+
+texte, n = preparer_message("  Bonjour,   j'ai un   problème  ", max_mots=50)
+print(repr(texte), n)
+texte2, n2 = preparer_message("un deux trois quatre cinq", max_mots=3)
+print(repr(texte2), n2)`,
+              solution: `def preparer_message(brut, max_mots=50):
+    mots = brut.split()
+    if len(mots) > max_mots:
+        mots = mots[:max_mots]
+        return " ".join(mots) + " [tronqué]", len(mots)
+    return " ".join(mots), len(mots)
+
+texte, n = preparer_message("  Bonjour,   j'ai un   problème  ", max_mots=50)
+print(repr(texte), n)
+texte2, n2 = preparer_message("un deux trois quatre cinq", max_mots=3)
+print(repr(texte2), n2)`,
+              tests: `_t, _n = preparer_message("  Bonjour,   j'ai un   problème  ")
+assert _t == "Bonjour, j'ai un problème", "Espaces des bords ET internes compactés"
+assert _n == 4, "4 mots conservés"
+_t2, _n2 = preparer_message("un deux trois quatre cinq", max_mots=3)
+assert _t2 == "un deux trois [tronqué]", "Troncature au nombre de MOTS + marqueur"
+assert _n2 == 3, "3 mots conservés"
+_t3, _n3 = preparer_message("exactement trois mots", max_mots=3)
+assert _t3 == "exactement trois mots", "Pile à la limite : pas de troncature"
+_t4, _n4 = preparer_message("")
+assert _t4 == "" and _n4 == 0, "Message vide : ('', 0)"
+print("TESTS_PASS")`,
+              hints: [
+                'brut.split() sans argument gère à la fois les bords et les espaces multiples.',
+                'Compare len(mots) à max_mots AVANT de recoller.',
+                'Le return renvoie deux valeurs séparées par une virgule : c\'est un tuple.',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -288,6 +372,99 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm1l2e2',
+              title: "Trier un comptage par fréquence",
+              instructions: `Counter sait le faire, mais savoir trier un dictionnaire soi-même est un geste fondamental. Écris :
+
+1. \`frequences(tokens)\` — le motif de comptage de la leçon (sans Counter !), qui renvoie le dict \`token → nombre\`,
+2. \`trier_par_frequence(comptes)\` — renvoie la **liste de paires** \`(mot, compte)\` triée par fréquence **décroissante**, et par ordre **alphabétique** en cas d'égalité.
+
+Indice pour le tri : \`sorted(comptes.items(), key=lambda p: (-p[1], p[0]))\` — trie sur le tuple (fréquence négative, mot). Comprendre cette ligne, c'est comprendre les tris multi-critères en Python.`,
+              starterCode: `def frequences(tokens):
+    ...
+
+def trier_par_frequence(comptes):
+    ...
+
+tokens = "le chat dort le chien dort le".split()
+comptes = frequences(tokens)
+print(comptes)
+print(trier_par_frequence(comptes))`,
+              solution: `def frequences(tokens):
+    comptes = {}
+    for t in tokens:
+        comptes[t] = comptes.get(t, 0) + 1
+    return comptes
+
+def trier_par_frequence(comptes):
+    return sorted(comptes.items(), key=lambda p: (-p[1], p[0]))
+
+tokens = "le chat dort le chien dort le".split()
+comptes = frequences(tokens)
+print(comptes)
+print(trier_par_frequence(comptes))`,
+              tests: `assert frequences(["a", "b", "a"]) == {"a": 2, "b": 1}, "Le motif de comptage classique"
+assert frequences([]) == {}, "Liste vide : dict vide"
+_t = trier_par_frequence({"b": 2, "a": 2, "c": 1})
+assert _t == [("a", 2), ("b", 2), ("c", 1)], "Fréquence décroissante, puis ordre alphabétique pour les ex æquo"
+assert trier_par_frequence({"x": 1}) == [("x", 1)], "Un seul élément"
+print("TESTS_PASS")`,
+              hints: [
+                'frequences : comptes[t] = comptes.get(t, 0) + 1 dans une boucle.',
+                'comptes.items() donne les paires (mot, compte) ; le key=lambda trie chaque paire par (-compte, mot).',
+                'Le signe moins sur p[1] inverse le tri des fréquences (décroissant) tout en gardant p[0] croissant.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm1l2e3',
+              title: "Défi — Extracteur de mots-clés",
+              instructions: `Le livrable classique « donnez-moi les thèmes de ces avis clients » : \`mots_cles(texte, stopwords, k=5)\` doit :
+
+1. normaliser (minuscules) et tokeniser,
+2. écarter les stopwords **et** les tokens de moins de 3 caractères,
+3. renvoyer les \`k\` mots les plus fréquents (utilise \`Counter\`), du plus au moins fréquent.
+
+C'est un extracteur de mots-clés minimal mais réel — la base des nuages de mots et des premières taxonomies.`,
+              starterCode: `from collections import Counter
+
+STOP = {"les", "des", "est", "une", "pour", "avec", "trop", "tres"}
+
+def mots_cles(texte, stopwords, k=5):
+    ...
+
+avis = "livraison rapide produit conforme livraison soignée produit robuste service rapide"
+print(mots_cles(avis, STOP, k=3))`,
+              solution: `from collections import Counter
+
+STOP = {"les", "des", "est", "une", "pour", "avec", "trop", "tres"}
+
+def mots_cles(texte, stopwords, k=5):
+    tokens = [t for t in texte.lower().split()
+              if t not in stopwords and len(t) >= 3]
+    return [mot for mot, _ in Counter(tokens).most_common(k)]
+
+avis = "livraison rapide produit conforme livraison soignée produit robuste service rapide"
+print(mots_cles(avis, STOP, k=3))`,
+              tests: `_r = mots_cles("livraison rapide produit conforme livraison soignée produit robuste service rapide", STOP, k=3)
+assert _r[0] in ("livraison", "produit", "rapide"), "Les mots dominants doivent sortir en tête"
+assert len(_r) == 3, "k=3 mots-clés"
+assert mots_cles("les des est", STOP, k=5) == [], "Que des stopwords : rien"
+assert mots_cles("ai le un de", set(), k=5) == [], "Tokens de moins de 3 lettres écartés"
+_r2 = mots_cles("Alpha alpha ALPHA beta beta gamma", set(), k=2)
+assert _r2 == ["alpha", "beta"], "Normalisation puis fréquence : alpha (3) puis beta (2)"
+print("TESTS_PASS")`,
+              hints: [
+                'Une seule list comprehension peut faire la tokenisation ET le double filtre.',
+                'Counter(tokens).most_common(k) puis extraire les mots des paires.',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -403,6 +580,102 @@ print("TESTS_PASS")`,
                 'Counter(mots) te donne tout : len(comptes) est le vocabulaire, comptes.items() permet de filtrer les hapax.',
                 'Les hapax : sorted(m for m, c in comptes.items() if c == 1).',
                 'Traite le cas du texte vide en premier (if not mots) pour éviter la division par zéro.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm1l3e2',
+              title: "Compléter l'audit : longueurs et extrêmes",
+              instructions: `Deux statistiques de plus pour ton rapport d'audit :
+
+1. \`longueur_moyenne(texte)\` — la longueur moyenne des mots, arrondie à 2 décimales (\`0.0\` pour un texte vide),
+2. \`mot_le_plus_long(texte)\` — le mot le plus long (\`""\` pour un texte vide). Indice : \`max(mots, key=len)\`.
+
+La longueur moyenne distingue un corpus de tweets (~4-5) d'un corpus juridique (~6-8) — un indicateur de registre très utilisé.`,
+              starterCode: `def longueur_moyenne(texte):
+    ...
+
+def mot_le_plus_long(texte):
+    ...
+
+t = "le transformer révolutionne le traitement automatique"
+print(longueur_moyenne(t))
+print(mot_le_plus_long(t))`,
+              solution: `def longueur_moyenne(texte):
+    mots = texte.split()
+    if not mots:
+        return 0.0
+    return round(sum(len(m) for m in mots) / len(mots), 2)
+
+def mot_le_plus_long(texte):
+    mots = texte.split()
+    if not mots:
+        return ""
+    return max(mots, key=len)
+
+t = "le transformer révolutionne le traitement automatique"
+print(longueur_moyenne(t))
+print(mot_le_plus_long(t))`,
+              tests: `assert longueur_moyenne("ab abcd") == 3.0, "(2 + 4) / 2 = 3.0"
+assert longueur_moyenne("") == 0.0, "Texte vide : 0.0, pas de division par zéro"
+assert longueur_moyenne("a bb ccc") == 2.0, "(1+2+3)/3 = 2.0"
+assert mot_le_plus_long("le chat magnifique dort") == "magnifique", "Le mot le plus long"
+assert mot_le_plus_long("") == "", "Texte vide : chaîne vide"
+print("TESTS_PASS")`,
+              hints: [
+                'sum(len(m) for m in mots) / len(mots), puis round(…, 2).',
+                'max(mots, key=len) compare les mots par leur longueur — le paramètre key, encore lui.',
+                'Traite le cas vide AVANT de calculer.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm1l3e3',
+              title: "Défi — Comparer deux corpus",
+              instructions: `Mission d'audit complète : on te donne deux corpus (avant/après une migration, ou deux sources de données) et on te demande « sont-ils proches ? ». Écris \`comparer(texte_a, texte_b)\` qui renvoie un dict :
+
+- \`"vocab_commun"\` : nombre de mots présents dans les deux (intersection de sets, opérateur \`&\`),
+- \`"specifiques_a"\` : liste **triée** des mots présents uniquement dans A (différence, opérateur \`-\`),
+- \`"jaccard"\` : la similarité de Jaccard \`|A ∩ B| / |A ∪ B|\`, arrondie à 3 décimales (l\'union s\'obtient avec \`|\`) — \`0.0\` si les deux sont vides.
+
+L'indice de Jaccard est une mesure de similarité d'ensembles utilisée partout : déduplication, détection de plagiat, comparaison de versions de corpus.`,
+              starterCode: `def comparer(texte_a, texte_b):
+    ...
+
+r = comparer("le chat dort ici", "le chien dort ailleurs")
+for cle, valeur in r.items():
+    print(cle, ":", valeur)`,
+              solution: `def comparer(texte_a, texte_b):
+    a = set(texte_a.lower().split())
+    b = set(texte_b.lower().split())
+    union = a | b
+    return {
+        "vocab_commun": len(a & b),
+        "specifiques_a": sorted(a - b),
+        "jaccard": round(len(a & b) / len(union), 3) if union else 0.0,
+    }
+
+r = comparer("le chat dort ici", "le chien dort ailleurs")
+for cle, valeur in r.items():
+    print(cle, ":", valeur)`,
+              tests: `_r = comparer("le chat dort ici", "le chien dort ailleurs")
+assert _r["vocab_commun"] == 2, "'le' et 'dort' en commun"
+assert _r["specifiques_a"] == ["chat", "ici"], "Spécifiques à A, triés"
+assert _r["jaccard"] == round(2 / 6, 3), "2 communs sur 6 mots au total"
+_r2 = comparer("même texte", "même texte")
+assert _r2["jaccard"] == 1.0 and _r2["specifiques_a"] == [], "Textes identiques : Jaccard 1"
+_r3 = comparer("", "")
+assert _r3["jaccard"] == 0.0, "Deux vides : 0.0, pas de division par zéro"
+assert comparer("Chat", "chat")["jaccard"] == 1.0, "La normalisation doit s'appliquer aux deux textes"
+print("TESTS_PASS")`,
+              hints: [
+                'set(texte.lower().split()) pour chaque texte, puis les opérateurs d\'ensembles : & (intersection), - (différence), | (union).',
+                'Gère union vide avant la division.',
+                'sorted() sur un set renvoie une liste triée.',
               ],
             },
           },

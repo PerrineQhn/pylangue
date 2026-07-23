@@ -109,6 +109,87 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm4l1e2',
+              title: "Générateur filtrant pour fichiers de config",
+              instructions: `Le nettoyage de flux le plus courant qui soit : écris le générateur \`lignes_utiles(lignes)\` qui cède (\`yield\`) chaque ligne :
+
+1. débarrassée de ses espaces de bord (\`strip\`),
+2. en sautant les lignes vides,
+3. en sautant les commentaires (lignes commençant par \`#\`).
+
+C'est le préambule de tout lecteur de fichier de config, de liste de stopwords, de corpus annoté.`,
+              starterCode: `def lignes_utiles(lignes):
+    ...
+
+brut = ["  chat  ", "", "# commentaire", "chien ", "   ", "# autre", "oiseau"]
+for l in lignes_utiles(brut):
+    print(repr(l))`,
+              solution: `def lignes_utiles(lignes):
+    for ligne in lignes:
+        ligne = ligne.strip()
+        if ligne and not ligne.startswith("#"):
+            yield ligne
+
+brut = ["  chat  ", "", "# commentaire", "chien ", "   ", "# autre", "oiseau"]
+for l in lignes_utiles(brut):
+    print(repr(l))`,
+              tests: `import types
+_g = lignes_utiles(["a"])
+assert isinstance(_g, types.GeneratorType), "Doit être un générateur (yield)"
+_r = list(lignes_utiles(["  chat  ", "", "# com", "chien ", "   ", "oiseau"]))
+assert _r == ["chat", "chien", "oiseau"], "Nettoyées, sans vides ni commentaires"
+assert list(lignes_utiles([])) == [], "Flux vide"
+assert list(lignes_utiles(["   # indenté"])) == [], "Un commentaire même indenté est sauté (strip d'abord !)"
+print("TESTS_PASS")`,
+              hints: [
+                'strip() AVANT les tests : une ligne "   " devient vide, un "  # x" devient un commentaire.',
+                'Une chaîne vide est falsy : "if ligne and ..." suffit.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm4l1e3',
+              title: "Défi — Fenêtres glissantes (n-grammes)",
+              instructions: `Les **n-grammes** (suites de n tokens consécutifs) servent aux modèles de langue statistiques, à la détection de plagiat, aux features de classification. Écris le générateur \`fenetres(tokens, n)\` qui cède chaque fenêtre de \`n\` tokens consécutifs sous forme de **tuple** :
+
+\`\`\`
+fenetres(["le", "chat", "dort"], 2)  ->  ("le", "chat"), ("chat", "dort")
+\`\`\`
+
+Si la séquence est plus courte que \`n\`, le générateur ne cède rien.`,
+              starterCode: `def fenetres(tokens, n):
+    ...
+
+for f in fenetres("le chat dort profondément".split(), 2):
+    print(f)`,
+              solution: `def fenetres(tokens, n):
+    for i in range(len(tokens) - n + 1):
+        yield tuple(tokens[i:i + n])
+
+for f in fenetres("le chat dort profondément".split(), 2):
+    print(f)`,
+              tests: `import types
+assert isinstance(fenetres(["a"], 1), types.GeneratorType), "Doit être un générateur"
+assert list(fenetres(["le", "chat", "dort"], 2)) == [("le", "chat"), ("chat", "dort")], "Bigrammes"
+assert list(fenetres(["a", "b", "c"], 3)) == [("a", "b", "c")], "Une seule fenêtre pleine"
+assert list(fenetres(["a", "b"], 3)) == [], "Séquence trop courte : rien"
+assert list(fenetres(["a", "b", "c"], 1)) == [("a",), ("b",), ("c",)], "Unigrammes : tuples à 1 élément"
+_compte = {}
+for f in fenetres("le chat et le chat".split(), 2):
+    _compte[f] = _compte.get(f, 0) + 1
+assert _compte[("le", "chat")] == 2, "Composable avec le motif de comptage : compter les bigrammes !"
+print("TESTS_PASS")`,
+              hints: [
+                'range(len(tokens) - n + 1) donne les indices de départ valides.',
+                'tuple(tokens[i:i+n]) — le tuple est hachable, donc utilisable comme clé de dict (voir le dernier test).',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -249,6 +330,157 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm4l2e2',
+              title: "Valider un lot en collectant les erreurs",
+              instructions: `Dans un batch de production, on ne s'arrête pas à la première donnée invalide : on traite tout, puis on rapporte. Écris \`valider_lot(textes, valideur)\` qui :
+
+1. applique \`valideur(texte)\` à chaque texte (le valideur renvoie une version normalisée ou lève \`ValueError\`),
+2. renvoie le tuple \`(valides, erreurs)\` : la liste des résultats valides, et la liste des tuples \`(texte_brut, message_d_erreur)\` — récupère le message avec \`str(e)\`.`,
+              starterCode: `def valideur_exemple(texte):
+    texte = texte.strip()
+    if not texte:
+        raise ValueError("texte vide")
+    if len(texte) > 20:
+        raise ValueError("texte trop long")
+    return texte.lower()
+
+def valider_lot(textes, valideur):
+    ...
+
+v, e = valider_lot(["  Bonjour ", "", "Un texte beaucoup trop long pour passer", "OK"], valideur_exemple)
+print("valides :", v)
+print("erreurs :", e)`,
+              solution: `def valideur_exemple(texte):
+    texte = texte.strip()
+    if not texte:
+        raise ValueError("texte vide")
+    if len(texte) > 20:
+        raise ValueError("texte trop long")
+    return texte.lower()
+
+def valider_lot(textes, valideur):
+    valides, erreurs = [], []
+    for t in textes:
+        try:
+            valides.append(valideur(t))
+        except ValueError as e:
+            erreurs.append((t, str(e)))
+    return valides, erreurs
+
+v, e = valider_lot(["  Bonjour ", "", "Un texte beaucoup trop long pour passer", "OK"], valideur_exemple)
+print("valides :", v)
+print("erreurs :", e)`,
+              tests: `_v, _e = valider_lot(["  Bonjour ", "", "Un texte beaucoup trop long pour passer", "OK"], valideur_exemple)
+assert _v == ["bonjour", "ok"], "Les textes valides, normalisés"
+assert len(_e) == 2, "Deux erreurs collectées — le lot ne s'arrête jamais"
+assert _e[0] == ("", "texte vide"), "Le texte brut ET le message d'erreur"
+assert _e[1][1] == "texte trop long", "Le message de la seconde erreur"
+_v2, _e2 = valider_lot([], valideur_exemple)
+assert _v2 == [] and _e2 == [], "Lot vide : deux listes vides"
+print("TESTS_PASS")`,
+              hints: [
+                'Le try/except est DANS la boucle : une erreur ne stoppe pas le lot.',
+                'except ValueError as e — puis str(e) pour le message.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm4l2e3',
+              title: "Défi — Le disjoncteur (circuit breaker)",
+              instructions: `Quand une API est en panne, insister aggrave tout (et coûte). Le pattern **circuit breaker** coupe le circuit après N échecs consécutifs. Implémente la classe \`Disjoncteur(seuil)\` avec la méthode \`appeler(fonction)\` :
+
+1. si le circuit est **ouvert** (échecs consécutifs ≥ seuil) → lève \`RuntimeError("circuit ouvert")\` SANS appeler la fonction,
+2. sinon appelle la fonction : en cas de succès, remet le compteur à zéro et renvoie le résultat ; si elle lève une exception, incrémente le compteur et relaie l'exception (\`raise\`).`,
+              starterCode: `class Disjoncteur:
+    def __init__(self, seuil=3):
+        ...
+
+    def appeler(self, fonction):
+        ...
+
+d = Disjoncteur(seuil=2)
+def echoue():
+    raise ConnectionError("api en panne")
+
+for _ in range(2):
+    try:
+        d.appeler(echoue)
+    except ConnectionError:
+        print("échec encaissé")
+try:
+    d.appeler(echoue)
+except RuntimeError as e:
+    print(e)`,
+              solution: `class Disjoncteur:
+    def __init__(self, seuil=3):
+        self.seuil = seuil
+        self.echecs = 0
+
+    def appeler(self, fonction):
+        if self.echecs >= self.seuil:
+            raise RuntimeError("circuit ouvert")
+        try:
+            resultat = fonction()
+            self.echecs = 0
+            return resultat
+        except Exception:
+            self.echecs += 1
+            raise
+
+d = Disjoncteur(seuil=2)
+def echoue():
+    raise ConnectionError("api en panne")
+
+for _ in range(2):
+    try:
+        d.appeler(echoue)
+    except ConnectionError:
+        print("échec encaissé")
+try:
+    d.appeler(echoue)
+except RuntimeError as e:
+    print(e)`,
+              tests: `_d = Disjoncteur(seuil=2)
+def _boom():
+    raise ConnectionError("panne")
+def _ok():
+    return 42
+
+assert _d.appeler(_ok) == 42, "Circuit fermé : l'appel passe"
+for _ in range(2):
+    try:
+        _d.appeler(_boom)
+    except ConnectionError:
+        pass
+try:
+    _d.appeler(_ok)
+    assert False, "Après 2 échecs consécutifs (seuil=2), le circuit doit être OUVERT même pour un appel sain"
+except RuntimeError as e:
+    assert str(e) == "circuit ouvert", "Le message exact"
+_d2 = Disjoncteur(seuil=2)
+try:
+    _d2.appeler(_boom)
+except ConnectionError:
+    pass
+assert _d2.appeler(_ok) == 42, "Un succès avant le seuil…"
+try:
+    _d2.appeler(_boom)
+except ConnectionError:
+    pass
+assert _d2.appeler(_ok) == 42, "…remet le compteur à zéro : le circuit reste fermé"
+print("TESTS_PASS")`,
+              hints: [
+                'Deux attributs : self.seuil et self.echecs (compteur).',
+                'Le test d\'ouverture se fait AVANT le try.',
+                'Dans le except : incrémente puis "raise" seul pour relayer l\'exception d\'origine.',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -373,6 +605,131 @@ print("TESTS_PASS")`,
                 'La structure : def enveloppe(*args) → test du cache → appel si absent → return. Puis enveloppe.cache = cache ; return enveloppe.',
                 'args est déjà un tuple, donc utilisable directement comme clé de dict.',
                 'Si "toujours 1 exécution" échoue : tu appelles la fonction avant de vérifier le cache.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm4l3e2',
+              title: "Le décorateur @compter_appels",
+              instructions: `L'instrumentation la plus simple qui soit — très utilisée pour suivre la consommation d'API : écris le décorateur \`compter_appels(fonction)\` dont l'enveloppe :
+
+1. incrémente son propre compteur à chaque appel (\`enveloppe.appels\`, initialisé à 0),
+2. transmet tous les arguments avec \`*args, **kwargs\` et renvoie le résultat tel quel.`,
+              starterCode: `def compter_appels(fonction):
+    ...
+
+@compter_appels
+def saluer(nom, ponctuation="!"):
+    return f"Bonjour {nom}{ponctuation}"
+
+print(saluer("Ada"))
+print(saluer("Alan", ponctuation="?"))
+print(f"{saluer.appels} appels")`,
+              solution: `def compter_appels(fonction):
+    def enveloppe(*args, **kwargs):
+        enveloppe.appels += 1
+        return fonction(*args, **kwargs)
+    enveloppe.appels = 0
+    return enveloppe
+
+@compter_appels
+def saluer(nom, ponctuation="!"):
+    return f"Bonjour {nom}{ponctuation}"
+
+print(saluer("Ada"))
+print(saluer("Alan", ponctuation="?"))
+print(f"{saluer.appels} appels")`,
+              tests: `_avant = saluer.appels
+assert saluer("Grace") == "Bonjour Grace!", "La fonction décorée garde son comportement"
+assert saluer.appels == _avant + 1, "Chaque appel incrémente"
+assert saluer("X", ponctuation=".") == "Bonjour X.", "Les kwargs passent à travers l'enveloppe"
+
+@compter_appels
+def _double(x):
+    return x * 2
+assert _double.appels == 0, "Chaque fonction décorée a SON compteur, initialisé à 0"
+_double(5)
+assert _double.appels == 1, "Compteur indépendant"
+print("TESTS_PASS")`,
+              hints: [
+                'La structure exacte du cours : enveloppe interne, attribut initialisé après sa définition, return enveloppe.',
+                '*args, **kwargs à la déclaration ET à la transmission.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm4l3e3',
+              title: "Défi — @limiter, un décorateur paramétré",
+              instructions: `Un cran au-dessus : un décorateur **avec paramètre** — c'est une fabrique (closure, module 2 !) qui renvoie un décorateur. Écris \`limiter(max_appels)\` tel que :
+
+\`\`\`
+@limiter(3)
+def appel_api(): ...
+\`\`\`
+
+autorise 3 appels, puis lève \`RuntimeError("limite atteinte")\` pour tous les suivants. Trois niveaux imbriqués : \`limiter(n)\` → \`decorateur(fonction)\` → \`enveloppe(*args)\`. Le budget d'appels par fonction est LE garde-fou de base des agents (module 13).`,
+              starterCode: `def limiter(max_appels):
+    ...
+
+@limiter(2)
+def appel_api(x):
+    return x * 10
+
+print(appel_api(1))
+print(appel_api(2))
+try:
+    appel_api(3)
+except RuntimeError as e:
+    print("bloqué :", e)`,
+              solution: `def limiter(max_appels):
+    def decorateur(fonction):
+        def enveloppe(*args, **kwargs):
+            if enveloppe.restants <= 0:
+                raise RuntimeError("limite atteinte")
+            enveloppe.restants -= 1
+            return fonction(*args, **kwargs)
+        enveloppe.restants = max_appels
+        return enveloppe
+    return decorateur
+
+@limiter(2)
+def appel_api(x):
+    return x * 10
+
+print(appel_api(1))
+print(appel_api(2))
+try:
+    appel_api(3)
+except RuntimeError as e:
+    print("bloqué :", e)`,
+              tests: `@limiter(2)
+def _f(x):
+    return x + 1
+assert _f(1) == 2 and _f(2) == 3, "Les 2 premiers appels passent"
+try:
+    _f(3)
+    assert False, "Le 3e appel doit être bloqué"
+except RuntimeError as e:
+    assert str(e) == "limite atteinte", "Le message exact"
+
+@limiter(1)
+def _g():
+    return "ok"
+assert _g() == "ok", "Chaque fonction décorée a son propre budget"
+try:
+    _g()
+    assert False, "Budget de _g épuisé indépendamment de _f"
+except RuntimeError:
+    pass
+print("TESTS_PASS")`,
+              hints: [
+                'limiter(n) renvoie decorateur ; decorateur(f) renvoie enveloppe. Trois def imbriqués.',
+                'Le budget vit sur l\'enveloppe (enveloppe.restants = max_appels), fixé juste avant son return.',
+                'Teste et décrémente AVANT d\'appeler la fonction.',
               ],
             },
           },

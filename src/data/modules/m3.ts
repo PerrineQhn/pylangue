@@ -106,6 +106,91 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm3l1e2',
+              title: "Extraire années et montants",
+              instructions: `Application directe de \`re.findall\` — l'extraction d'entités simple, demandée en permanence :
+
+1. \`annees(texte)\` — toutes les années 1900-2099 : motif \`r"\\b(?:19|20)\\d{2}\\b"\` (le \`(?:...)\` est un groupe **non capturant** : il groupe sans capturer, pour que findall renvoie le match entier),
+2. \`montants(texte)\` — tous les montants en euros au format \`"1200 €"\` ou \`"1200€"\` : nombre + espace optionnel + €. Renvoie les chaînes complètes.`,
+              starterCode: `import re
+
+def annees(texte):
+    ...
+
+def montants(texte):
+    ...
+
+t = "Fondée en 1998, rachetée en 2021 pour 450000 € puis revendue 900000€."
+print(annees(t))
+print(montants(t))`,
+              solution: `import re
+
+def annees(texte):
+    return re.findall(r"\\b(?:19|20)\\d{2}\\b", texte)
+
+def montants(texte):
+    return re.findall(r"\\d+ ?€", texte)
+
+t = "Fondée en 1998, rachetée en 2021 pour 450000 € puis revendue 900000€."
+print(annees(t))
+print(montants(t))`,
+              tests: `assert annees("De 1998 à 2021.") == ["1998", "2021"], "Les deux années"
+assert annees("Le code 3021 et l'an 1850") == [], "3021 et 1850 sont hors plage 19xx/20xx"
+assert annees("En 2024, tout va bien") == ["2024"], "Année en contexte"
+assert montants("Prix : 1200 € ou 999€") == ["1200 €", "999€"], "Avec et sans espace avant €"
+assert montants("Aucun prix ici") == [], "Rien à extraire"
+print("TESTS_PASS")`,
+              hints: [
+                'Sans le \\b, "13021" matcherait — les frontières de mot délimitent.',
+                'Avec (19|20) SANS ?:, findall renverrait ["19", "20"] au lieu des années complètes. Piège très classique !',
+                'Pour les montants : \\d+ puis " ?" (espace optionnel) puis €.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm3l1e3',
+              title: "Défi — Anonymiseur de données personnelles",
+              instructions: `Obligation RGPD très concrète : avant d'envoyer des textes à une API externe ou de constituer un corpus, on masque les données personnelles. Écris \`anonymiser(texte)\` qui remplace :
+
+1. les **emails** (motif \`r"\\S+@\\S+\\.\\S+"\` suffit ici) par \`[EMAIL]\`,
+2. les **téléphones français** (0 suivi de 9 chiffres, séparateurs optionnels : \`r"0\\d(?:[ .-]?\\d{2}){4}"\`) par \`[TEL]\`.
+
+Ordre important : traite les emails d'abord.`,
+              starterCode: `import re
+
+def anonymiser(texte):
+    ...
+
+t = "Contactez marie.dupont@exemple.fr ou au 06 12 34 56 78 (ou 0612345678)."
+print(anonymiser(t))`,
+              solution: `import re
+
+def anonymiser(texte):
+    texte = re.sub(r"\\S+@\\S+\\.\\S+", "[EMAIL]", texte)
+    texte = re.sub(r"0\\d(?:[ .-]?\\d{2}){4}", "[TEL]", texte)
+    return texte
+
+t = "Contactez marie.dupont@exemple.fr ou au 06 12 34 56 78 (ou 0612345678)."
+print(anonymiser(t))`,
+              tests: `assert anonymiser("Écrire à jean@mail.com svp") == "Écrire à [EMAIL] svp", "Email masqué"
+assert anonymiser("Tel : 06 12 34 56 78") == "Tel : [TEL]", "Téléphone avec espaces"
+assert anonymiser("Tel : 0612345678") == "Tel : [TEL]", "Téléphone compact"
+assert anonymiser("Tel : 06.12.34.56.78") == "Tel : [TEL]", "Téléphone avec points"
+_r = anonymiser("a@b.fr et 0711223344 et c@d.com")
+assert _r == "[EMAIL] et [TEL] et [EMAIL]", "Plusieurs occurrences, tous types"
+assert anonymiser("Rien de sensible.") == "Rien de sensible.", "Texte sans PII : inchangé"
+print("TESTS_PASS")`,
+              hints: [
+                'Deux re.sub successifs, chacun sur le résultat du précédent.',
+                'Dans le motif téléphone, (?:[ .-]?\\d{2}){4} répète 4 fois "séparateur optionnel + 2 chiffres".',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -242,6 +327,102 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm3l2e2',
+              title: "Navigation sûre dans une réponse d'API",
+              instructions: `Les réponses d'API LLM sont profondément imbriquées, et chaque champ peut manquer. Écris \`extraire_texte(reponse)\` qui va chercher \`reponse["choices"][0]["message"]["content"]\` et renvoie \`None\` si N'IMPORTE QUEL maillon manque (clé absente, liste vide).
+
+Méthode conseillée : enchaîner les \`.get()\` avec des défauts bien choisis — zéro try/except nécessaire.`,
+              starterCode: `def extraire_texte(reponse):
+    ...
+
+ok = {"choices": [{"message": {"content": "Bonjour !"}}]}
+vide = {"choices": []}
+cassee = {"error": "rate limit"}
+print(extraire_texte(ok))
+print(extraire_texte(vide))
+print(extraire_texte(cassee))`,
+              solution: `def extraire_texte(reponse):
+    choices = reponse.get("choices") or []
+    if not choices:
+        return None
+    message = choices[0].get("message") or {}
+    return message.get("content")
+
+ok = {"choices": [{"message": {"content": "Bonjour !"}}]}
+vide = {"choices": []}
+cassee = {"error": "rate limit"}
+print(extraire_texte(ok))
+print(extraire_texte(vide))
+print(extraire_texte(cassee))`,
+              tests: `assert extraire_texte({"choices": [{"message": {"content": "Salut"}}]}) == "Salut", "Chemin complet présent"
+assert extraire_texte({"choices": []}) is None, "Liste choices vide"
+assert extraire_texte({"error": "boom"}) is None, "Pas de clé choices"
+assert extraire_texte({"choices": [{"message": {}}]}) is None, "Pas de content"
+assert extraire_texte({"choices": [{}]}) is None, "Pas de message"
+assert extraire_texte({}) is None, "Réponse complètement vide"
+print("TESTS_PASS")`,
+              hints: [
+                'À chaque niveau : .get, remplacer None par un défaut ([] ou {}), tester si nécessaire.',
+                'choices[0] n\'est sûr QUE si tu as vérifié que la liste n\'est pas vide.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm3l2e3',
+              title: "Défi — Fusionner deux datasets JSONL",
+              instructions: `Deux équipes ont annoté chacune leur fichier JSONL d'exemples \`{"id": ..., "texte": ..., "label": ...}\`, avec des recouvrements. Écris \`fusionner(contenu_a, contenu_b)\` qui :
+
+1. parse les deux contenus (lignes vides ignorées),
+2. déduplique par \`id\` — **en cas de conflit, la version de B gagne** (la plus récente),
+3. renvoie la liste des exemples **triée par id**.
+
+Astuce d'architecture : un dict \`id → exemple\` rempli avec A puis écrasé par B fait toute la logique.`,
+              starterCode: `import json
+
+A = '{"id": 3, "texte": "ancien", "label": "neg"}\\n{"id": 1, "texte": "bonjour", "label": "pos"}'
+B = '{"id": 3, "texte": "corrigé", "label": "pos"}\\n{"id": 2, "texte": "merci", "label": "pos"}'
+
+def fusionner(contenu_a, contenu_b):
+    ...
+
+for ex in fusionner(A, B):
+    print(ex)`,
+              solution: `import json
+
+A = '{"id": 3, "texte": "ancien", "label": "neg"}\\n{"id": 1, "texte": "bonjour", "label": "pos"}'
+B = '{"id": 3, "texte": "corrigé", "label": "pos"}\\n{"id": 2, "texte": "merci", "label": "pos"}'
+
+def fusionner(contenu_a, contenu_b):
+    par_id = {}
+    for contenu in (contenu_a, contenu_b):
+        for ligne in contenu.splitlines():
+            if ligne.strip():
+                ex = json.loads(ligne)
+                par_id[ex["id"]] = ex
+    return [par_id[i] for i in sorted(par_id)]
+
+for ex in fusionner(A, B):
+    print(ex)`,
+              tests: `_r = fusionner(A, B)
+assert len(_r) == 3, "ids 1, 2, 3 : trois exemples après déduplication"
+assert [e["id"] for e in _r] == [1, 2, 3], "Triés par id"
+_id3 = [e for e in _r if e["id"] == 3][0]
+assert _id3["texte"] == "corrigé" and _id3["label"] == "pos", "En cas de conflit, B écrase A"
+assert fusionner("", "") == [], "Deux contenus vides : liste vide"
+_solo = fusionner('{"id": 7, "texte": "x", "label": "y"}', "")
+assert _solo == [{"id": 7, "texte": "x", "label": "y"}], "Un seul fichier rempli"
+print("TESTS_PASS")`,
+              hints: [
+                'Parcours A puis B dans le même dict par_id : l\'écrasement fait la règle "B gagne" gratuitement.',
+                'sorted(par_id) trie les clés ; reconstruis la liste dans cet ordre.',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -366,6 +547,124 @@ print("TESTS_PASS")`,
                 'N\'oublie pas d\'échapper les crochets du timestamp : \\[ et \\].',
                 'groupdict() renvoie tout en chaînes : convertis entree et sortie avec int().',
                 'total_tokens_par_modele : le motif de comptage habituel, en sautant les None.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm3l3e2',
+              title: "Filtrer les logs par plage horaire",
+              instructions: `Suite de l'analyse : « montre-moi ce qui s'est passé entre 9h et 9h13 ». Sur des entrées déjà parsées (dicts avec la clé \`"heure"\` au format \`"HH:MM:SS"\`), écris :
+
+1. \`entre(entrees, debut, fin)\` — les entrées dont l'heure est dans \`[debut, fin]\` inclus. Bonus de simplicité : au format HH:MM:SS, la comparaison de **chaînes** suit l'ordre chronologique — aucun parsing de date nécessaire,
+2. \`premiere_apres(entrees, heure)\` — la première entrée strictement après \`heure\` (ordre du fichier), ou \`None\`.`,
+              starterCode: `ENTREES = [
+    {"heure": "09:05:00", "modele": "gpt-mini"},
+    {"heure": "09:12:44", "modele": "claude-sonnet"},
+    {"heure": "09:13:10", "modele": "gpt-mini"},
+    {"heure": "10:02:00", "modele": "claude-sonnet"},
+]
+
+def entre(entrees, debut, fin):
+    ...
+
+def premiere_apres(entrees, heure):
+    ...
+
+print(entre(ENTREES, "09:00:00", "09:13:00"))
+print(premiere_apres(ENTREES, "09:12:44"))`,
+              solution: `ENTREES = [
+    {"heure": "09:05:00", "modele": "gpt-mini"},
+    {"heure": "09:12:44", "modele": "claude-sonnet"},
+    {"heure": "09:13:10", "modele": "gpt-mini"},
+    {"heure": "10:02:00", "modele": "claude-sonnet"},
+]
+
+def entre(entrees, debut, fin):
+    return [e for e in entrees if debut <= e["heure"] <= fin]
+
+def premiere_apres(entrees, heure):
+    for e in entrees:
+        if e["heure"] > heure:
+            return e
+    return None
+
+print(entre(ENTREES, "09:00:00", "09:13:00"))
+print(premiere_apres(ENTREES, "09:12:44"))`,
+              tests: `_r = entre(ENTREES, "09:00:00", "09:13:00")
+assert len(_r) == 2, "Deux entrées entre 09:00:00 et 09:13:00"
+assert _r[0]["heure"] == "09:05:00", "La première de la plage"
+assert entre(ENTREES, "09:12:44", "09:12:44") == [ENTREES[1]], "Bornes incluses"
+assert entre(ENTREES, "23:00:00", "23:59:59") == [], "Plage vide"
+assert premiere_apres(ENTREES, "09:12:44")["heure"] == "09:13:10", "Strictement après"
+assert premiere_apres(ENTREES, "11:00:00") is None, "Rien après : None"
+print("TESTS_PASS")`,
+              hints: [
+                'debut <= e["heure"] <= fin — la double comparaison chaînée de Python.',
+                'premiere_apres : un for avec return dès le premier match ; le return None après la boucle.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm3l3e3',
+              title: "Défi — La facture par modèle",
+              instructions: `Le rapport final pour ton manager. À partir d'entrées parsées (\`{"modele", "entree", "sortie"}\`) et d'une grille tarifaire \`{modele: (prix_entree, prix_sortie)}\` en € par token, écris \`facture(entrees, tarifs)\` qui renvoie un dict \`modele → coût total arrondi à 4 décimales\`.
+
+Cas réel à gérer : un modèle absent de la grille est facturé au **tarif par défaut** \`tarifs["defaut"]\` (toujours présent).`,
+              starterCode: `ENTREES = [
+    {"modele": "gpt-mini", "entree": 1000, "sortie": 500},
+    {"modele": "claude-sonnet", "entree": 2000, "sortie": 1000},
+    {"modele": "gpt-mini", "entree": 500, "sortie": 100},
+    {"modele": "modele-mystere", "entree": 100, "sortie": 100},
+]
+
+TARIFS = {
+    "gpt-mini": (0.00000015, 0.0000006),
+    "claude-sonnet": (0.000003, 0.000015),
+    "defaut": (0.000001, 0.000002),
+}
+
+def facture(entrees, tarifs):
+    ...
+
+for modele, cout in facture(ENTREES, TARIFS).items():
+    print(f"{modele} : {cout} €")`,
+              solution: `ENTREES = [
+    {"modele": "gpt-mini", "entree": 1000, "sortie": 500},
+    {"modele": "claude-sonnet", "entree": 2000, "sortie": 1000},
+    {"modele": "gpt-mini", "entree": 500, "sortie": 100},
+    {"modele": "modele-mystere", "entree": 100, "sortie": 100},
+]
+
+TARIFS = {
+    "gpt-mini": (0.00000015, 0.0000006),
+    "claude-sonnet": (0.000003, 0.000015),
+    "defaut": (0.000001, 0.000002),
+}
+
+def facture(entrees, tarifs):
+    totaux = {}
+    for e in entrees:
+        prix_in, prix_out = tarifs.get(e["modele"], tarifs["defaut"])
+        cout = e["entree"] * prix_in + e["sortie"] * prix_out
+        totaux[e["modele"]] = totaux.get(e["modele"], 0.0) + cout
+    return {m: round(c, 4) for m, c in totaux.items()}
+
+for modele, cout in facture(ENTREES, TARIFS).items():
+    print(f"{modele} : {cout} €")`,
+              tests: `_f = facture(ENTREES, TARIFS)
+assert _f["claude-sonnet"] == round(2000 * 0.000003 + 1000 * 0.000015, 4), "entrée x prix_in + sortie x prix_out"
+_gm = 1000 * 0.00000015 + 500 * 0.0000006 + 500 * 0.00000015 + 100 * 0.0000006
+assert _f["gpt-mini"] == round(_gm, 4), "Les deux appels gpt-mini cumulés"
+assert _f["modele-mystere"] == round(100 * 0.000001 + 100 * 0.000002, 4), "Modèle inconnu : tarif par défaut"
+assert facture([], TARIFS) == {}, "Aucune entrée : dict vide"
+print("TESTS_PASS")`,
+              hints: [
+                'tarifs.get(modele, tarifs["defaut"]) déballe en (prix_in, prix_out).',
+                'Le motif d\'accumulation habituel, puis un arrondi final en dict comprehension.',
               ],
             },
           },
