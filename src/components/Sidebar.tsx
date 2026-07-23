@@ -15,6 +15,7 @@ export function Sidebar({ current, onNavigate, onHome, progress, open, onClose }
     <>
       {open && <div className="sidebar-overlay" onClick={onClose} />}
       <nav className={`sidebar ${open ? 'sidebar-open' : ''}`}>
+        <button className="sidebar-close" aria-label="Fermer le sommaire" onClick={onClose}>✕</button>
         <button className="sidebar-title" onClick={onHome}>
           <span className="logo-mark">{"</>"}</span>
           <span>

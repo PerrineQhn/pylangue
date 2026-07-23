@@ -83,7 +83,9 @@ export default function App() {
 
   return (
     <div className="app">
-      <button className="menu-btn" onClick={() => setSidebarOpen(o => !o)}>☰ Sommaire</button>
+      {!sidebarOpen && (
+        <button className="menu-btn" aria-label="Ouvrir le sommaire" onClick={() => setSidebarOpen(true)}>☰</button>
+      )}
       <button
         className="theme-btn"
         title={theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
