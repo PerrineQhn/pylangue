@@ -6,8 +6,8 @@
 // ton projet Supabase, et recompile le bundle.
 
 export const SYNC_CONFIG = {
-  url: '',      // ex : 'https://abcdefgh.supabase.co'
-  anonKey: '',  // la clé "anon public" du projet
+  url: 'https://odhkqbtkopvrweltuwdh.supabase.co',      // ex : 'https://abcdefgh.supabase.co'
+  anonKey: 'sb_publishable_aX4ZzWHUcS-jj19_qFLOcA_t8OWQVBO',  // la clé "anon public" du projet
 }
 
 export function syncDisponible(): boolean {

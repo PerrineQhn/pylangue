@@ -8,11 +8,16 @@ import { mergeProgress, type Progress } from './storage'
 const TABLE = 'progression'
 
 function entetes(): Record<string, string> {
-  return {
+  const h: Record<string, string> = {
     apikey: SYNC_CONFIG.anonKey,
-    Authorization: `Bearer ${SYNC_CONFIG.anonKey}`,
     'Content-Type': 'application/json',
   }
+  // Les clés legacy sont des JWT (eyJ...) et passent aussi par Authorization ;
+  // les nouvelles clés sb_publishable_... ne doivent PAS y figurer.
+  if (SYNC_CONFIG.anonKey.startsWith('eyJ')) {
+    h.Authorization = `Bearer ${SYNC_CONFIG.anonKey}`
+  }
+  return h
 }
 
 const MOTS = [
