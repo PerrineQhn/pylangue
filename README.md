@@ -1,6 +1,6 @@
 # PyLangue
 
-**Apprendre Python à travers le NLP et les LLM** — un parcours interactif où chaque concept Python est enseigné via un vrai problème de traitement du langage : de la première chaîne de caractères jusqu'à l'implémentation de l'attention en NumPy et aux patterns professionnels des API LLM.
+**Apprendre Python à travers le NLP et les LLM** — un parcours interactif complet (13 modules, 26 leçons) où chaque concept Python est enseigné via un vrai problème de traitement du langage : de la première chaîne de caractères jusqu'au bloc transformer complet en NumPy, au RAG de bout en bout et à la boucle agentique.
 
 **Essayer en ligne → [perrineqhn.github.io/pylangue](https://perrineqhn.github.io/pylangue/)**
 
@@ -24,27 +24,27 @@ Chaque leçon combine explications, exemples exécutables et modifiables, exerci
 |---|---|
 | Premiers pas : Python par le texte | ✅ disponible |
 | Fonctions, pipelines et objets (tokenizer complet en POO) | ✅ disponible |
-| Fichiers, regex et données réelles | 🔜 planifié |
-| Python idiomatique pour la data | 🔜 planifié |
+| Fichiers, regex et données réelles | ✅ disponible |
+| Python idiomatique pour la data | ✅ disponible |
 
 **Palier 2 — ML & NLP classique**
 
 | Module | Statut |
 |---|---|
 | NumPy, le langage des tenseurs | ✅ disponible |
-| TF-IDF et moteur de recherche from scratch | 🔜 planifié |
-| Un neurone, puis un réseau (sentiment analysis) | 🔜 planifié |
-| Tokenisation moderne : BPE | 🔜 planifié |
+| TF-IDF et moteur de recherche from scratch | ✅ disponible |
+| Un neurone, puis un réseau (sentiment analysis) | ✅ disponible |
+| Tokenisation moderne : BPE | ✅ disponible |
 
 **Palier 3 — LLM moderne**
 
 | Module | Statut |
 |---|---|
 | L'attention, from scratch (softmax, température, QKV) | ✅ disponible |
-| Anatomie complète d'un transformer | 🔜 planifié |
+| Anatomie complète d'un transformer | ✅ disponible |
 | Coder avec les API LLM (messages, sorties structurées) | ✅ disponible |
-| RAG de bout en bout | 🔜 planifié |
-| Agents, tool use et évaluation | 🔜 planifié |
+| RAG de bout en bout | ✅ disponible |
+| Agents, tool use et évaluation | ✅ disponible |
 
 ## Fonctionnalités
 
@@ -85,7 +85,7 @@ src/
 
 Le contenu est entièrement déclaratif : un module est un objet TypeScript dans `src/data/`. Pour développer un module marqué `status: 'outline'`, il suffit de remplir son tableau `lessons` en suivant le format des modules existants (sections `text`, `code`, `exercise`, `quiz`). Les tests d'un exercice sont du Python : des `assert` avec messages en français, terminés par `print("TESTS_PASS")`.
 
-Les contributions sont bienvenues — en particulier sur les modules planifiés (RAG, BPE, agents).
+Les contributions sont bienvenues : nouvelles leçons, nouveaux exercices, corrections.
 
 ## Déploiement
 

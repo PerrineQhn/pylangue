@@ -295,14 +295,302 @@ print("TESTS_PASS")`,
     id: 'm10',
     tier: 3,
     title: 'Anatomie complète d\'un transformer',
-    tagline: 'Multi-têtes, positional encodings, couches empilées : assembler le puzzle.',
-    status: 'outline',
-    lessons: [],
-    outline: [
-      'Multi-head attention : plusieurs "regards" en parallèle',
-      'Positional encodings : donner la notion d\'ordre (dont RoPE, utilisé par Llama)',
-      'Le bloc transformer : attention + MLP + résidus + normalisation',
-      'Du bloc au modèle : GPT en ~200 lignes (lecture guidée de nanoGPT)',
+    tagline: 'Multi-têtes, résidus, layer norm : assembler le bloc qui, empilé, devient GPT.',
+    status: 'ready',
+    lessons: [
+      {
+        id: 'm10l1',
+        title: 'Multi-head attention',
+        minutes: 40,
+        sections: [
+          {
+            kind: 'text',
+            md: `# Plusieurs regards en parallèle
+
+Ton attention du module 9 calcule *une* pondération par paire de tokens. Mais une phrase mérite plusieurs lectures simultanées : qui fait quoi (syntaxe), qui désigne qui (coréférence), quel ton… L'idée du **multi-head** : découper la dimension en \`h\` « têtes », faire tourner une attention *indépendante* dans chaque sous-espace, puis concaténer.
+
+## Le mécanisme
+
+Pour des matrices \`Q, K, V\` de shape \`(n, d)\` et \`h\` têtes (avec \`d\` divisible par \`h\`) :
+
+\`\`\`
+1. Découpe Q, K, V en h tranches de largeur d/h (sur les colonnes)
+2. Pour chaque tête i : sortie_i = attention(Q_i, K_i, V_i)   # ton module 9 !
+3. Concatène les h sorties -> shape (n, d) à nouveau
+\`\`\`
+
+(Dans un vrai transformer s'ajoute une projection linéaire finale apprise — conceptuellement secondaire ici.)
+
+## Pourquoi l'ordre des tokens n'existe pas encore
+
+Surprise : l'attention est **insensible à l'ordre** — permuter les tokens permute juste les sorties. Or « le chat mord le chien » ≠ « le chien mord le chat ». Les transformers injectent donc l'information de position dans les embeddings : *positional encodings* appris (GPT-2), ou rotations RoPE appliquées à Q et K (Llama, la plupart des modèles récents). Retiens le principe : **la position est une information ajoutée, pas une propriété de l'architecture**.`,
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm10l1e1',
+              title: 'Implémenter le multi-head',
+              instructions: `Le starter fournit \`attention(Q, K, V)\` (ton module 9). Implémente :
+
+\`multi_head(Q, K, V, h)\` qui :
+
+1. calcule \`dh = d // h\` (largeur d'une tête),
+2. pour chaque tête \`i\` : extrait les colonnes \`[i*dh : (i+1)*dh]\` de Q, K et V, applique \`attention\`,
+3. concatène les sorties avec \`np.concatenate(liste, axis=1)\` et la renvoie (shape \`(n, d)\`).`,
+              starterCode: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def attention(Q, K, V):
+    d = Q.shape[1]
+    return softmax_lignes(Q @ K.T / np.sqrt(d)) @ V
+
+def multi_head(Q, K, V, h):
+    ...
+
+rng = np.random.RandomState(0)
+Q = rng.randn(4, 8); K = rng.randn(4, 8); V = rng.randn(4, 8)
+sortie = multi_head(Q, K, V, h=2)
+print("shape :", sortie.shape)`,
+              solution: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def attention(Q, K, V):
+    d = Q.shape[1]
+    return softmax_lignes(Q @ K.T / np.sqrt(d)) @ V
+
+def multi_head(Q, K, V, h):
+    d = Q.shape[1]
+    dh = d // h
+    sorties = []
+    for i in range(h):
+        deb, fin = i * dh, (i + 1) * dh
+        sorties.append(attention(Q[:, deb:fin], K[:, deb:fin], V[:, deb:fin]))
+    return np.concatenate(sorties, axis=1)
+
+rng = np.random.RandomState(0)
+Q = rng.randn(4, 8); K = rng.randn(4, 8); V = rng.randn(4, 8)
+sortie = multi_head(Q, K, V, h=2)
+print("shape :", sortie.shape)`,
+              tests: `import numpy as np
+_rng = np.random.RandomState(0)
+_Q = _rng.randn(4, 8); _K = _rng.randn(4, 8); _V = _rng.randn(4, 8)
+_out = multi_head(_Q, _K, _V, 2)
+assert _out.shape == (4, 8), "La shape de sortie doit être (n, d)"
+assert np.allclose(multi_head(_Q, _K, _V, 1), attention(_Q, _K, _V)), "Avec h=1, multi_head == attention simple"
+_t0 = attention(_Q[:, :4], _K[:, :4], _V[:, :4])
+assert np.allclose(_out[:, :4], _t0), "Les 4 premières colonnes doivent venir de la tête 0 (colonnes 0-3)"
+_t1 = attention(_Q[:, 4:], _K[:, 4:], _V[:, 4:])
+assert np.allclose(_out[:, 4:], _t1), "Les 4 dernières colonnes doivent venir de la tête 1"
+assert not np.allclose(_out, attention(_Q, _K, _V)), "h=2 doit donner un résultat différent d'une seule grande attention"
+print("TESTS_PASS")`,
+              hints: [
+                'Q[:, deb:fin] extrait les colonnes deb à fin-1 — le slicing 2D de NumPy.',
+                'Accumule les sorties de chaque tête dans une liste, puis np.concatenate(liste, axis=1).',
+                'Vérifie avec h=1 : tu dois retrouver exactement ton attention simple.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'quiz',
+            questions: [
+              {
+                question: 'Qu\'apporte le multi-head par rapport à une seule attention de même dimension totale ?',
+                options: [
+                  'Uniquement de la vitesse',
+                  'Chaque tête peut se spécialiser sur un type de relation différent (syntaxe, coréférence, position…) dans son propre sous-espace',
+                  'Plus de paramètres, rien d\'autre',
+                  'Il supprime le coût quadratique',
+                ],
+                correct: 1,
+                explanation: 'Les visualisations montrent des têtes spécialisées : l\'une suit le token précédent, une autre les accords, une autre les entités. Une attention unique moyennerait ces "regards" incompatibles.',
+              },
+              {
+                question: 'Pourquoi les transformers ont-ils besoin de positional encodings ?',
+                options: [
+                  'Pour accélérer l\'entraînement',
+                  'L\'attention seule est invariante à l\'ordre des tokens : sans position injectée, "chat mord chien" = "chien mord chat"',
+                  'Pour compresser les embeddings',
+                  'C\'est optionnel, GPT n\'en a pas',
+                ],
+                correct: 1,
+                explanation: 'L\'attention est une opération sur des *ensembles*. La position doit être ajoutée explicitement — embeddings de position appris, ou rotations RoPE (Llama, Qwen, la norme actuelle).',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'm10l2',
+        title: 'Le bloc transformer : résidus, layer norm, MLP',
+        minutes: 40,
+        sections: [
+          {
+            kind: 'text',
+            md: `# Les trois ingrédients restants
+
+Un « bloc transformer » (répété 32 fois dans Llama-8B, ~100 fois dans les plus gros modèles) ajoute trois mécanismes autour de l'attention :
+
+## 1. Les connexions résiduelles
+
+Au lieu de \`x = f(x)\`, on écrit \`x = x + f(x)\` : chaque couche *ajoute une correction* au lieu de remplacer. C'est ce qui permet d'empiler des dizaines de couches sans que le gradient ne s'évanouisse — l'information a toujours un « raccourci » direct.
+
+## 2. La layer normalization
+
+Recentre et rééchelonne chaque vecteur de token (moyenne 0, variance 1) pour stabiliser l'entraînement :
+
+\`\`\`
+layer_norm(x) = (x - moyenne(x)) / sqrt(variance(x) + eps)
+\`\`\`
+
+(par ligne — chaque token est normalisé indépendamment ; les modèles récents utilisent la variante RMSNorm, encore plus simple.)
+
+## 3. Le MLP (feed-forward)
+
+Après l'attention (qui *mélange* les tokens entre eux), un petit réseau à deux couches traite chaque token *individuellement* : expansion ×4, non-linéarité, retour à la dimension d'origine. C'est là que résident ~2/3 des paramètres d'un LLM — on l'interprète souvent comme la « mémoire des connaissances » du modèle.
+
+## Le bloc assemblé (version pré-norm, la moderne)
+
+\`\`\`
+x = x + attention(layer_norm(x))     # communication entre tokens
+x = x + mlp(layer_norm(x))           # calcul par token
+\`\`\`
+
+Deux lignes. Empile-les N fois entre un embedding d'entrée et un softmax de sortie : tu as un GPT.`,
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm10l2e1',
+              title: 'Assembler le bloc complet',
+              instructions: `Le starter fournit \`attention\`. Implémente :
+
+1. \`layer_norm(X)\` — normalise **chaque ligne** : soustrais sa moyenne, divise par \`sqrt(variance + 1e-5)\` (utilise \`mean\` et \`var\` avec \`axis=1, keepdims=True\`),
+2. \`mlp(X, W1, W2)\` — \`relu(X @ W1) @ W2\` où \`relu(z) = np.maximum(0, z)\`,
+3. \`bloc_transformer(X, W1, W2)\` — les deux lignes du cours : résiduel + attention sur la norme (avec \`Q=K=V=layer_norm(X)\`), puis résiduel + MLP sur la norme.`,
+              starterCode: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def attention(Q, K, V):
+    d = Q.shape[1]
+    return softmax_lignes(Q @ K.T / np.sqrt(d)) @ V
+
+def layer_norm(X):
+    ...
+
+def mlp(X, W1, W2):
+    ...
+
+def bloc_transformer(X, W1, W2):
+    ...
+
+rng = np.random.RandomState(1)
+X = rng.randn(3, 4)          # 3 tokens, dim 4
+W1 = rng.randn(4, 16) * 0.1  # expansion x4
+W2 = rng.randn(16, 4) * 0.1
+print(bloc_transformer(X, W1, W2).round(2))`,
+              solution: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def attention(Q, K, V):
+    d = Q.shape[1]
+    return softmax_lignes(Q @ K.T / np.sqrt(d)) @ V
+
+def layer_norm(X):
+    mu = X.mean(axis=1, keepdims=True)
+    var = X.var(axis=1, keepdims=True)
+    return (X - mu) / np.sqrt(var + 1e-5)
+
+def mlp(X, W1, W2):
+    return np.maximum(0, X @ W1) @ W2
+
+def bloc_transformer(X, W1, W2):
+    n = layer_norm(X)
+    X = X + attention(n, n, n)
+    n = layer_norm(X)
+    X = X + mlp(n, W1, W2)
+    return X
+
+rng = np.random.RandomState(1)
+X = rng.randn(3, 4)
+W1 = rng.randn(4, 16) * 0.1
+W2 = rng.randn(16, 4) * 0.1
+print(bloc_transformer(X, W1, W2).round(2))`,
+              tests: `import numpy as np
+_X = np.array([[1.0, 2.0, 3.0, 4.0], [10.0, 10.0, 10.0, 10.0]])
+_n = layer_norm(_X)
+assert np.allclose(_n.mean(axis=1), 0, atol=1e-6), "Chaque ligne doit avoir une moyenne ~0"
+assert np.allclose(_n[0].std(), 1, atol=1e-2), "Chaque ligne doit avoir un écart-type ~1"
+assert not np.isnan(_n).any(), "Une ligne constante ne doit pas donner NaN — le +1e-5 sous la racine"
+_rng = np.random.RandomState(1)
+_Xr = _rng.randn(3, 4); _W1 = _rng.randn(4, 16) * 0.1; _W2 = _rng.randn(16, 4) * 0.1
+assert mlp(np.zeros((2, 4)), _W1, _W2).shape == (2, 4), "Le MLP doit rendre la dimension d'origine"
+_out = bloc_transformer(_Xr, _W1, _W2)
+assert _out.shape == _Xr.shape, "Le bloc préserve la shape (empilable N fois !)"
+assert not np.allclose(_out, _Xr), "Le bloc doit transformer l'entrée"
+_corr = np.corrcoef(_out.flatten(), _Xr.flatten())[0, 1]
+assert _corr > 0.5, "Grâce aux résidus, la sortie doit rester corrélée à l'entrée (x + correction)"
+print("TESTS_PASS")`,
+              hints: [
+                'layer_norm : mean et var avec axis=1, keepdims=True pour que le broadcasting fonctionne ligne à ligne.',
+                'relu = np.maximum(0, ·) — élément par élément.',
+                'bloc : X = X + attention(n, n, n) puis X = X + mlp(layer_norm(X), W1, W2). L\'ordre pré-norm : on normalise AVANT chaque sous-couche.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'quiz',
+            questions: [
+              {
+                question: 'Pourquoi x = x + f(x) (résiduel) plutôt que x = f(x) ?',
+                options: [
+                  'C\'est plus rapide à calculer',
+                  'Le gradient peut traverser directement l\'addition : on peut empiler des dizaines de couches sans que le signal d\'apprentissage ne s\'évanouisse',
+                  'Ça économise de la mémoire',
+                  'Pour éviter les nombres négatifs',
+                ],
+                correct: 1,
+                explanation: 'Sans résidus, les réseaux au-delà de ~10 couches deviennent quasi inentraînables. Cette idée (ResNet, 2015) est l\'un des déblocages qui ont rendu possibles les architectures à 100+ couches des LLM.',
+              },
+              {
+                question: 'Quelle est la division du travail entre attention et MLP dans un bloc ?',
+                options: [
+                  'Ils font la même chose en double',
+                  'L\'attention fait circuler l\'information ENTRE les tokens ; le MLP transforme chaque token INDIVIDUELLEMENT',
+                  'L\'attention gère le texte, le MLP les images',
+                  'Le MLP corrige les erreurs de l\'attention',
+                ],
+                correct: 1,
+                explanation: 'Communication puis calcul : c\'est la lecture standard du bloc. Les travaux d\'interprétabilité localisent d\'ailleurs beaucoup de "connaissances factuelles" dans les MLP, et les "relations" dans l\'attention.',
+              },
+              {
+                question: 'Il te manque quoi, concrètement, pour transformer ton bloc en vrai GPT qui génère du texte ?',
+                options: [
+                  'Rien du tout',
+                  'Les projections apprises (W_q, W_k, W_v), le masque causal, les embeddings (tokens + positions), l\'empilement de N blocs et le softmax final — puis un GROS entraînement',
+                  'Un algorithme complètement différent',
+                  'Une base de données de réponses',
+                ],
+                correct: 1,
+                explanation: 'Tout le squelette y est ! Le masque causal (chaque token ne regarde que ses prédécesseurs) est la seule pièce conceptuelle nouvelle. Lecture recommandée maintenant : nanoGPT de Karpathy — ~300 lignes que tu peux désormais lire ligne à ligne.',
+              },
+            ],
+          },
+        ],
+      },
     ],
   },
   {
@@ -577,28 +865,601 @@ print("TESTS_PASS")`,
     id: 'm12',
     tier: 3,
     title: 'RAG de bout en bout',
-    tagline: 'Chunking, embeddings, retrieval, assemblage de prompt : construire le pattern le plus demandé en entreprise.',
-    status: 'outline',
-    lessons: [],
-    outline: [
-      'Découper des documents en chunks (taille, chevauchement, structure)',
-      'Indexer : embeddings + similarité cosinus (modules 5-6 réutilisés tels quels)',
-      'Assembler le prompt : contexte récupéré + question + consignes de citation',
-      'Évaluer un RAG : rappel du retrieval, fidélité des réponses, hallucinations',
+    tagline: 'Chunking, retrieval, assemblage de prompt : construire le pattern le plus demandé en entreprise.',
+    status: 'ready',
+    lessons: [
+      {
+        id: 'm12l1',
+        title: 'Chunking : découper intelligemment',
+        minutes: 35,
+        sections: [
+          {
+            kind: 'text',
+            md: `# Pourquoi le RAG, et pourquoi le chunking d'abord
+
+Un LLM ne connaît ni tes documents internes, ni rien de postérieur à son entraînement. Le **RAG** (Retrieval-Augmented Generation) répond en deux temps : *retrouver* les passages pertinents dans ta base documentaire, puis les *injecter* dans le prompt pour que le modèle réponde en s'appuyant dessus.
+
+Tout commence par le **chunking** : découper les documents en morceaux indexables. C'est l'étape la plus sous-estimée — et celle qui fait le plus souvent la différence entre un RAG qui marche et un RAG qui hallucine.
+
+## Les deux paramètres clés
+
+- **Taille du chunk** : trop petit → le contexte est amputé (une phrase orpheline ne veut rien dire) ; trop grand → le retrieval devient imprécis et le prompt se remplit de bruit. Typiquement 200-800 tokens.
+- **Chevauchement (overlap)** : les chunks consécutifs partagent une marge (10-20 %) pour qu'une information à cheval sur une frontière ne soit jamais coupée en deux moitiés inutilisables.
+
+\`\`\`
+Texte :   [ A B C D E F G H I J ]
+taille=4, overlap=1 :
+chunk 1 : [ A B C D ]
+chunk 2 : [ D E F G ]      # D répété : le chevauchement
+chunk 3 : [ G H I J ]
+\`\`\`
+
+## En production
+
+Les découpages réels respectent la *structure* : paragraphes, titres, cellules de tableau — plutôt que des fenêtres aveugles. Mais la fenêtre glissante avec chevauchement reste la base de référence, et c'est elle que tu implémentes aujourd'hui.`,
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm12l1e1',
+              title: 'Fenêtre glissante avec chevauchement',
+              instructions: `Implémente \`decouper(texte, taille, overlap)\` :
+
+1. tokenise par espaces (\`.split()\`),
+2. produit des chunks de \`taille\` mots, chaque chunk commençant \`taille - overlap\` mots après le précédent,
+3. chaque chunk est la chaîne des mots re-joints par des espaces,
+4. le dernier chunk peut être plus court, mais **ne produis pas** de chunk entièrement contenu dans le précédent.
+
+Exemple : 10 mots, taille=4, overlap=1 → chunks aux positions 0, 3, 6, 9… non, 0, 3, 6 (le chunk partant de 9 serait couvert).`,
+              starterCode: `def decouper(texte, taille, overlap):
+    ...
+
+texte = "a b c d e f g h i j"
+for c in decouper(texte, taille=4, overlap=1):
+    print(repr(c))`,
+              solution: `def decouper(texte, taille, overlap):
+    mots = texte.split()
+    pas = taille - overlap
+    chunks = []
+    for debut in range(0, len(mots), pas):
+        chunk = mots[debut:debut + taille]
+        chunks.append(" ".join(chunk))
+        if debut + taille >= len(mots):
+            break
+    return chunks
+
+texte = "a b c d e f g h i j"
+for c in decouper(texte, taille=4, overlap=1):
+    print(repr(c))`,
+              tests: `_c = decouper("a b c d e f g h i j", 4, 1)
+assert _c == ["a b c d", "d e f g", "g h i j"], "Fenêtres de 4 avec 1 mot de chevauchement"
+_c2 = decouper("a b c d e", 3, 0)
+assert _c2 == ["a b c", "d e"], "Sans overlap : blocs disjoints, dernier incomplet"
+_c3 = decouper("a b", 5, 2)
+assert _c3 == ["a b"], "Texte plus court qu'un chunk : un seul chunk"
+_c4 = decouper("a b c d e f", 4, 2)
+assert _c4 == ["a b c d", "c d e f"], "taille=4, overlap=2 : pas de 2"
+for _prev, _nxt in zip(_c[:-1], _c[1:]):
+    assert _prev.split()[-1] == _nxt.split()[0], "Les chunks consécutifs doivent partager le mot de chevauchement"
+print("TESTS_PASS")`,
+              hints: [
+                'Le pas d\'avancement est taille - overlap ; range(0, len(mots), pas) donne les débuts.',
+                'mots[debut:debut + taille] — le slicing tronque tout seul en fin de liste.',
+                'Le "break" quand debut + taille >= len(mots) évite un dernier chunk redondant entièrement couvert.',
+              ],
+            },
+          },
+          {
+            kind: 'quiz',
+            questions: [
+              {
+                question: 'À quoi sert le chevauchement entre chunks ?',
+                options: [
+                  'À augmenter artificiellement la taille de la base',
+                  'À éviter qu\'une information à cheval sur une frontière de chunk devienne introuvable (coupée en deux moitiés)',
+                  'À accélérer le retrieval',
+                  'À compresser les documents',
+                ],
+                correct: 1,
+                explanation: '"Le capital de la société [FRONTIÈRE] s\'élève à 2 M€" : sans overlap, aucun des deux chunks ne contient l\'information complète. Le chevauchement est une assurance peu coûteuse.',
+              },
+              {
+                question: 'Quel symptôme typique produit un chunking avec des chunks beaucoup trop grands ?',
+                options: [
+                  'Le retrieval devient flou (un chunk mélange dix sujets) et le prompt se remplit de contenu non pertinent',
+                  'Les réponses sont plus courtes',
+                  'La base de données refuse l\'indexation',
+                  'Aucun, plus grand est toujours mieux',
+                ],
+                correct: 0,
+                explanation: 'L\'embedding d\'un chunk fourre-tout ne ressemble à rien de précis : il matche mal les questions pointues. Et injecter des pavés dilue l\'attention du modèle sur le passage utile.',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'm12l2',
+        title: 'Retrieval et assemblage du prompt',
+        minutes: 40,
+        sections: [
+          {
+            kind: 'text',
+            md: `# Assembler le pipeline complet
+
+Tu as *toutes* les briques : le chunking (leçon 1), la similarité (module 5), TF-IDF (module 6), la construction de prompts (module 11). Il ne reste qu'à les visser ensemble.
+
+## Le pipeline canonique
+
+\`\`\`
+INDEXATION (une fois) :
+  documents -> chunks -> vecteurs -> index
+
+REQUÊTE (à chaque question) :
+  1. vectoriser la question
+  2. scorer tous les chunks, garder le top-k
+  3. assembler le prompt : contexte numéroté + question + consignes
+  4. appeler le LLM
+\`\`\`
+
+En production, les vecteurs viennent d'un modèle d'embeddings et l'index d'une base vectorielle — mais avec ta similarité TF, le *flux* est identique à 100 %.
+
+## L'assemblage du prompt : là où tout se joue
+
+Un bon prompt RAG contient trois choses : les passages **numérotés** (pour permettre les citations), la **question**, et des **consignes de fidélité** :
+
+\`\`\`
+Réponds UNIQUEMENT à partir des passages ci-dessous.
+Cite le numéro du passage utilisé, au format [1].
+Si la réponse ne s'y trouve pas, dis-le explicitement.
+
+[1] <chunk 1>
+[2] <chunk 2>
+
+Question : <question>
+\`\`\`
+
+La consigne « dis-le si la réponse n'y est pas » est ta première défense contre les hallucinations — et le taux de réponses correctement *refusées* est une métrique d'évaluation à part entière (module 13).`,
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm12l2e1',
+              title: 'Le pipeline RAG complet',
+              instructions: `Le starter fournit \`score_tf\` (similarité par mots communs pondérés). Implémente :
+
+1. \`top_k(question, chunks, k)\` — renvoie les indices des \`k\` chunks aux meilleurs scores, **triés du meilleur au moins bon** (indice : \`sorted(range(len(scores)), key=..., reverse=True)\`),
+2. \`construire_prompt(question, chunks, indices)\` — assemble le prompt exactement au format :
+
+\`\`\`
+Réponds uniquement à partir des passages suivants. Cite tes sources au format [n].
+
+[1] <premier chunk retenu>
+[2] <second chunk retenu>
+
+Question : <question>
+\`\`\`
+
+(numérotation [1], [2]… dans l'ordre des indices fournis, une ligne vide avant "Question").`,
+              starterCode: `def score_tf(question, chunk):
+    q = set(question.lower().split())
+    c = chunk.lower().split()
+    return sum(1 for mot in c if mot in q)
+
+CHUNKS = [
+    "Le RAG combine recherche documentaire et génération par LLM.",
+    "La tour Eiffel mesure 330 mètres depuis 2022.",
+    "Le chunking découpe les documents en passages indexables.",
+    "Les embeddings encodent le sens des textes en vecteurs.",
+]
+
+def top_k(question, chunks, k):
+    ...
+
+def construire_prompt(question, chunks, indices):
+    ...
+
+q = "Comment le RAG combine recherche et génération ?"
+idx = top_k(q, CHUNKS, 2)
+print(idx)
+print(construire_prompt(q, CHUNKS, idx))`,
+              solution: `def score_tf(question, chunk):
+    q = set(question.lower().split())
+    c = chunk.lower().split()
+    return sum(1 for mot in c if mot in q)
+
+CHUNKS = [
+    "Le RAG combine recherche documentaire et génération par LLM.",
+    "La tour Eiffel mesure 330 mètres depuis 2022.",
+    "Le chunking découpe les documents en passages indexables.",
+    "Les embeddings encodent le sens des textes en vecteurs.",
+]
+
+def top_k(question, chunks, k):
+    scores = [score_tf(question, c) for c in chunks]
+    ordre = sorted(range(len(chunks)), key=lambda i: scores[i], reverse=True)
+    return ordre[:k]
+
+def construire_prompt(question, chunks, indices):
+    lignes = ["Réponds uniquement à partir des passages suivants. Cite tes sources au format [n].", ""]
+    for n, i in enumerate(indices, start=1):
+        lignes.append(f"[{n}] {chunks[i]}")
+    lignes.append("")
+    lignes.append(f"Question : {question}")
+    return "\\n".join(lignes)
+
+q = "Comment le RAG combine recherche et génération ?"
+idx = top_k(q, CHUNKS, 2)
+print(idx)
+print(construire_prompt(q, CHUNKS, idx))`,
+              tests: `_idx = top_k("Comment le RAG combine recherche et génération ?", CHUNKS, 2)
+assert _idx[0] == 0, "Le chunk 0 (RAG/recherche/génération) doit arriver premier"
+assert len(_idx) == 2, "top_k doit renvoyer k indices"
+assert 1 not in _idx, "La tour Eiffel n'a rien à faire dans le top-2"
+_p = construire_prompt("Quoi ?", CHUNKS, [2, 0])
+_lignes = _p.split("\\n")
+assert _lignes[0].startswith("Réponds uniquement"), "La consigne d'abord"
+assert _lignes[1] == "", "Ligne vide après la consigne"
+assert _lignes[2] == "[1] " + CHUNKS[2], "Le premier indice fourni devient [1]"
+assert _lignes[3] == "[2] " + CHUNKS[0], "Le second devient [2]"
+assert _lignes[4] == "" and _lignes[5] == "Question : Quoi ?", "Ligne vide puis la question"
+print("TESTS_PASS")`,
+              hints: [
+                'top_k : calcule la liste des scores, puis sorted(range(len(chunks)), key=lambda i: scores[i], reverse=True)[:k].',
+                'construire_prompt : construis une liste de lignes puis "\\n".join(lignes) — plus propre que la concaténation.',
+                'enumerate(indices, start=1) donne la numérotation [1], [2]… quel que soit l\'indice réel du chunk.',
+              ],
+            },
+          },
+          {
+            kind: 'quiz',
+            questions: [
+              {
+                question: 'Pourquoi numéroter les passages dans le prompt RAG ?',
+                options: [
+                  'Pour faire joli',
+                  'Pour que le modèle puisse CITER ses sources ([2]) — traçabilité et vérifiabilité des réponses',
+                  'Le LLM ne lit pas les passages non numérotés',
+                  'Pour réduire le nombre de tokens',
+                ],
+                correct: 1,
+                explanation: 'Une réponse RAG sans citation est invérifiable. Les citations permettent l\'audit humain ET l\'évaluation automatique (le passage cité contient-il vraiment l\'affirmation ?).',
+              },
+              {
+                question: 'Ton RAG répond mal. Le premier réflexe de debug ?',
+                options: [
+                  'Changer de LLM',
+                  'Regarder ce que le retrieval a réellement renvoyé : si les bons passages n\'y sont pas, aucun modèle ne peut bien répondre',
+                  'Augmenter la température',
+                  'Raccourcir la question',
+                ],
+                correct: 1,
+                explanation: '"Garbage in, garbage out" : dans la majorité des RAG défaillants, le problème est en amont (chunking, retrieval) — pas dans le modèle. Toujours inspecter le top-k avant d\'accuser la génération.',
+              },
+            ],
+          },
+        ],
+      },
     ],
   },
   {
     id: 'm13',
     tier: 3,
     title: 'Agents, tool use et évaluation',
-    tagline: 'La boucle agentique : le LLM qui décide, appelle des outils, et comment mesurer que ça marche.',
-    status: 'outline',
-    lessons: [],
-    outline: [
-      'La boucle agent : observer → décider → appeler un outil → recommencer',
-      'Implémenter un mini-agent avec 2 outils (calculatrice, recherche) et un mock LLM',
-      'Les pièges : boucles infinies, erreurs d\'outils, coût — garde-fous et budgets',
-      'Évaluation : jeux de test, LLM-as-judge, métriques métier — le sujet chaud de 2026',
+    tagline: 'La boucle agentique et l\'art de mesurer qu\'un système à base de LLM fonctionne vraiment.',
+    status: 'ready',
+    lessons: [
+      {
+        id: 'm13l1',
+        title: 'La boucle agent',
+        minutes: 40,
+        sections: [
+          {
+            kind: 'text',
+            md: `# Du chatbot à l'agent
+
+Un chatbot répond. Un **agent** *agit* : il décide d'appeler des outils (recherche, calcul, code, API), observe les résultats, et recommence jusqu'à pouvoir répondre. Claude Code, les Deep Research, les agents d'entreprise : tous reposent sur la même boucle, étonnamment simple.
+
+## La boucle canonique
+
+\`\`\`
+messages = [question]
+tant que True :
+    decision = llm(messages)
+    si decision est une réponse finale :
+        retourne-la
+    sinon (c'est un appel d'outil) :
+        resultat = executer_outil(decision.outil, decision.args)
+        messages += [decision, resultat]     # l'agent VOIT le résultat
+\`\`\`
+
+Le point crucial : **le LLM ne fait que décider**. C'est ton code qui exécute les outils, contrôle ce qui est permis, et renvoie les résultats dans l'historique. Le modèle produit du texte structuré ; ton programme fait le reste.
+
+## Les garde-fous non négociables
+
+Une boucle pilotée par un modèle probabiliste *peut* ne jamais s'arrêter, appeler un outil avec des arguments invalides, ou tourner en rond. Tout agent de production a :
+
+- un **budget d'itérations** (max_tours) — jamais de \`while True\` nu,
+- une **validation des arguments** avant exécution,
+- une gestion d'erreur qui renvoie l'échec *au modèle* (souvent il se corrige au tour suivant !).`,
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm13l1e1',
+              title: 'Implémenter la boucle agent',
+              instructions: `Le starter fournit un \`MockLLM\` scripté (il « décide » d'utiliser la calculatrice, puis répond) et un dict \`OUTILS\`. Implémente :
+
+\`executer_agent(llm, question, outils, max_tours=5)\` :
+
+1. initialise \`messages = [{"role": "user", "content": question}]\`,
+2. boucle au plus \`max_tours\` fois : appelle \`llm.decider(messages)\`,
+3. si la décision a le type \`"reponse"\` → renvoie \`(decision["contenu"], messages)\`,
+4. si type \`"outil"\` → exécute \`outils[decision["nom"]](decision["args"])\`, puis ajoute à \`messages\` la décision (role \`"assistant"\`) et le résultat (\`{"role": "outil", "content": resultat}\`),
+5. si le budget s'épuise → renvoie \`("[budget épuisé]", messages)\`.`,
+              starterCode: `def calculatrice(args):
+    return str(eval(args["expression"], {"__builtins__": {}}, {}))
+
+OUTILS = {"calculatrice": calculatrice}
+
+class MockLLM:
+    """Scénario scripté : demande un calcul, puis répond avec le résultat."""
+    def decider(self, messages):
+        derniers = [m for m in messages if m["role"] == "outil"]
+        if not derniers:
+            return {"type": "outil", "nom": "calculatrice",
+                    "args": {"expression": "127 * 43"}}
+        return {"type": "reponse",
+                "contenu": f"Le résultat est {derniers[-1]['content']}."}
+
+def executer_agent(llm, question, outils, max_tours=5):
+    ...
+
+reponse, historique = executer_agent(MockLLM(), "Combien font 127 x 43 ?", OUTILS)
+print(reponse)
+print(f"{len(historique)} messages dans l'historique")`,
+              solution: `def calculatrice(args):
+    return str(eval(args["expression"], {"__builtins__": {}}, {}))
+
+OUTILS = {"calculatrice": calculatrice}
+
+class MockLLM:
+    def decider(self, messages):
+        derniers = [m for m in messages if m["role"] == "outil"]
+        if not derniers:
+            return {"type": "outil", "nom": "calculatrice",
+                    "args": {"expression": "127 * 43"}}
+        return {"type": "reponse",
+                "contenu": f"Le résultat est {derniers[-1]['content']}."}
+
+def executer_agent(llm, question, outils, max_tours=5):
+    messages = [{"role": "user", "content": question}]
+    for _ in range(max_tours):
+        decision = llm.decider(messages)
+        if decision["type"] == "reponse":
+            return decision["contenu"], messages
+        resultat = outils[decision["nom"]](decision["args"])
+        messages.append({"role": "assistant", "content": str(decision)})
+        messages.append({"role": "outil", "content": resultat})
+    return "[budget épuisé]", messages
+
+reponse, historique = executer_agent(MockLLM(), "Combien font 127 x 43 ?", OUTILS)
+print(reponse)
+print(f"{len(historique)} messages dans l'historique")`,
+              tests: `_r, _h = executer_agent(MockLLM(), "Combien font 127 x 43 ?", OUTILS)
+assert _r == "Le résultat est 5461.", "L'agent doit répondre avec le résultat du calcul"
+assert len(_h) == 3, "user + assistant (appel d'outil) + outil (résultat) = 3 messages"
+assert _h[0]["role"] == "user" and _h[1]["role"] == "assistant" and _h[2]["role"] == "outil", "Ordre des rôles"
+assert _h[2]["content"] == "5461", "Le résultat de l'outil doit être dans l'historique"
+
+class _Bavard:
+    def decider(self, messages):
+        return {"type": "outil", "nom": "calculatrice", "args": {"expression": "1+1"}}
+_r2, _h2 = executer_agent(_Bavard(), "?", OUTILS, max_tours=3)
+assert _r2 == "[budget épuisé]", "Un agent qui boucle doit être arrêté par le budget"
+assert len(_h2) == 7, "1 user + 3 tours x 2 messages = 7"
+print("TESTS_PASS")`,
+              hints: [
+                'La boucle : for _ in range(max_tours), avec le return à l\'intérieur dès qu\'une décision de type "reponse" arrive.',
+                'outils[decision["nom"]] récupère la fonction ; appelle-la avec decision["args"].',
+                'Le return final ("[budget épuisé]", messages) est APRÈS la boucle — il ne s\'exécute que si elle s\'épuise.',
+              ],
+            },
+          },
+          {
+            kind: 'quiz',
+            questions: [
+              {
+                question: 'Dans la boucle agent, qui exécute réellement les outils ?',
+                options: [
+                  'Le LLM, sur les serveurs du fournisseur',
+                  'Ton code : le modèle ne produit qu\'une DEMANDE structurée, ton programme décide de l\'exécuter et lui renvoie le résultat',
+                  'Le navigateur',
+                  'Personne, les outils sont simulés',
+                ],
+                correct: 1,
+                explanation: 'C\'est la frontière de sécurité fondamentale : le modèle propose, ton code dispose. Tu peux valider, filtrer, sandboxer, journaliser — tout passe par toi.',
+              },
+              {
+                question: 'Pourquoi renvoyer les ERREURS d\'outils au modèle plutôt que de crasher ?',
+                options: [
+                  'Pour cacher les bugs',
+                  'Le modèle peut souvent se corriger au tour suivant (reformuler des arguments, essayer un autre outil)',
+                  'Les erreurs n\'arrivent jamais',
+                  'Pour économiser des tokens',
+                ],
+                correct: 1,
+                explanation: '"File not found" renvoyé à l\'agent → il corrige le chemin et réessaie. C\'est un des comportements qui rendent les agents robustes — à condition que la boucle le permette.',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'm13l2',
+        title: 'Évaluer un système LLM',
+        minutes: 40,
+        sections: [
+          {
+            kind: 'text',
+            md: `# La compétence la plus demandée de 2026
+
+Construire une démo LLM prend une journée. Savoir **prouver qu'elle marche** — et qu'elle marche *encore* après un changement de prompt ou de modèle — est ce qui distingue l'ingénieur du bricoleur. Les evals sont devenues le nerf de la guerre.
+
+## Les trois étages de l'évaluation
+
+**1. Métriques exactes** — quand la sortie est vérifiable mécaniquement :
+
+\`\`\`
+exact_match : la réponse normalisée est-elle exactement l'attendue ?
+inclusion   : la réponse contient-elle l'information clé ?
+\`\`\`
+
+Rapides, objectives, parfaites pour l'extraction, la classification, le calcul.
+
+**2. LLM-as-judge** — quand la qualité est subjective (ton, clarté, fidélité à une source) : on demande à un *autre* modèle de noter la réponse selon une grille précise. Puissant mais à manier avec soin : biais de position, préférence pour les réponses longues, auto-complaisance. Règle d'or : **calibrer le juge sur un échantillon annoté par des humains** avant de lui faire confiance.
+
+**3. Métriques métier** — taux de résolution des tickets, satisfaction, coût par requête. La seule vérité finale.
+
+## Le jeu de test (golden set)
+
+Un fichier de cas \`{entrée, sortie attendue}\`, construit à la main, versionné avec le code. À chaque modification du prompt ou du modèle, on rejoue tout et on compare les scores : c'est le *test de régression* du monde LLM. 50 bons exemples battent 5000 exemples médiocres.`,
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm13l2e1',
+              title: 'Un harnais d\'évaluation complet',
+              instructions: `Implémente :
+
+1. \`normaliser(texte)\` — minuscules, sans ponctuation \`.,!?\`, espaces compactés (tu l'as déjà écrite au module 1 — recommence de mémoire !),
+2. \`exact_match(prediction, attendu)\` — \`True\` si les versions normalisées sont égales,
+3. \`evaluer(systeme, jeu_de_test)\` — applique \`systeme(entree)\` à chaque cas, calcule le taux d'exact match, et renvoie le dict \`{"score": taux, "echecs": [liste des entrées ratées]}\`.
+
+Le starter fournit un faux système à évaluer.`,
+              starterCode: `import re
+
+def systeme_a_evaluer(entree):
+    """Un 'modèle' imparfait à évaluer."""
+    reponses = {
+        "capitale de la France": "Paris.",
+        "2 + 2": "4",
+        "auteur de 1984": "George Orwell",
+        "capitale du Japon": "Kyoto",     # erreur volontaire !
+    }
+    return reponses.get(entree, "je ne sais pas")
+
+JEU_DE_TEST = [
+    {"entree": "capitale de la France", "attendu": "paris"},
+    {"entree": "2 + 2", "attendu": "4"},
+    {"entree": "auteur de 1984", "attendu": "george orwell"},
+    {"entree": "capitale du Japon", "attendu": "tokyo"},
+]
+
+def normaliser(texte):
+    ...
+
+def exact_match(prediction, attendu):
+    ...
+
+def evaluer(systeme, jeu_de_test):
+    ...
+
+print(evaluer(systeme_a_evaluer, JEU_DE_TEST))`,
+              solution: `import re
+
+def systeme_a_evaluer(entree):
+    reponses = {
+        "capitale de la France": "Paris.",
+        "2 + 2": "4",
+        "auteur de 1984": "George Orwell",
+        "capitale du Japon": "Kyoto",
+    }
+    return reponses.get(entree, "je ne sais pas")
+
+JEU_DE_TEST = [
+    {"entree": "capitale de la France", "attendu": "paris"},
+    {"entree": "2 + 2", "attendu": "4"},
+    {"entree": "auteur de 1984", "attendu": "george orwell"},
+    {"entree": "capitale du Japon", "attendu": "tokyo"},
+]
+
+def normaliser(texte):
+    texte = texte.lower()
+    texte = re.sub(r"[.,!?]", "", texte)
+    texte = re.sub(r"\\s+", " ", texte).strip()
+    return texte
+
+def exact_match(prediction, attendu):
+    return normaliser(prediction) == normaliser(attendu)
+
+def evaluer(systeme, jeu_de_test):
+    echecs = []
+    reussites = 0
+    for cas in jeu_de_test:
+        prediction = systeme(cas["entree"])
+        if exact_match(prediction, cas["attendu"]):
+            reussites += 1
+        else:
+            echecs.append(cas["entree"])
+    return {"score": reussites / len(jeu_de_test), "echecs": echecs}
+
+print(evaluer(systeme_a_evaluer, JEU_DE_TEST))`,
+              tests: `assert normaliser("  Paris. ") == "paris", "Minuscules, sans ponctuation, sans espaces superflus"
+assert exact_match("Paris.", "paris"), "'Paris.' et 'paris' doivent matcher après normalisation"
+assert not exact_match("Lyon", "paris"), "Des réponses différentes ne matchent pas"
+_r = evaluer(systeme_a_evaluer, JEU_DE_TEST)
+assert _r["score"] == 0.75, "3 réussites sur 4 : score 0.75"
+assert _r["echecs"] == ["capitale du Japon"], "Le seul échec : la capitale du Japon (Kyoto != Tokyo)"
+_parfait = lambda e: {"a": "1", "b": "2"}[e]
+assert evaluer(_parfait, [{"entree": "a", "attendu": "1"}])["score"] == 1.0, "Système parfait : score 1.0"
+print("TESTS_PASS")`,
+              hints: [
+                'normaliser : lower(), puis re.sub(r"[.,!?]", "", …), puis compactage des espaces (module 3 !).',
+                'evaluer : boucle sur les cas, compteur de réussites, liste des entrées en échec, division finale.',
+              ],
+            },
+          },
+          {
+            kind: 'quiz',
+            questions: [
+              {
+                question: 'Pourquoi normaliser avant de comparer prédiction et réponse attendue ?',
+                options: [
+                  'Pour tricher sur les scores',
+                  '"Paris." et "paris" sont la même réponse : sans normalisation, on compterait des faux échecs de pure forme',
+                  'La normalisation est obligatoire en Python',
+                  'Pour accélérer la comparaison',
+                ],
+                correct: 1,
+                explanation: 'Un harnais d\'éval trop strict sur la forme noie les vrais problèmes sous les faux positifs. La normalisation (et ses limites !) est une décision d\'évaluation à part entière.',
+              },
+              {
+                question: 'Quel est le principal danger du LLM-as-judge utilisé sans précaution ?',
+                options: [
+                  'Il est trop lent',
+                  'Ses biais (longueur, position, style) peuvent produire des scores systématiquement faussés — d\'où la calibration sur des annotations humaines',
+                  'Il refuse de noter',
+                  'Il coûte toujours trop cher',
+                ],
+                correct: 1,
+                explanation: 'Un juge non calibré peut préférer les réponses verbeuses, ou noter différemment selon l\'ordre de présentation. On mesure d\'abord son accord avec des humains sur un échantillon, PUIS on l\'automatise.',
+              },
+              {
+                question: 'Ton nouveau prompt fait passer le score d\'éval de 82 % à 79 %. Que fais-tu ?',
+                options: [
+                  'Je déploie quand même, 3 points ce n\'est rien',
+                  'J\'inspecte les cas passés en échec : régression réelle, cas limites nouveaux, ou bruit d\'échantillonnage — le jeu de test sert exactement à ça',
+                  'Je supprime les cas qui échouent du jeu de test',
+                  'Je change de métrique',
+                ],
+                correct: 1,
+                explanation: 'Le réflexe de l\'ingénieur : lire les échecs un par un avant toute décision. (Et jamais, jamais retirer les cas gênants — c\'est l\'équivalent LLM de supprimer les tests qui échouent.)',
+              },
+            ],
+          },
+        ],
+      },
     ],
   },
 ]
