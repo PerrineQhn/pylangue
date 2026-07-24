@@ -16,32 +16,42 @@ export const m7: Module = {
             kind: 'text',
             md: `# L'unité de base de tout le deep learning
 
-Un « neurone » artificiel n'a rien de mystérieux : c'est un **produit scalaire suivi d'une fonction non linéaire**. Tu as déjà tous les ingrédients.
+Un « neurone » artificiel n'a rien de mystérieux : c'est un **produit scalaire suivi d'une fonction non linéaire**. Tu as déjà tous les ingrédients de la leçon sur NumPy. Et le vertige de cette leçon, c'est qu'un LLM à 100 milliards de paramètres n'est *rien d'autre* que ce motif, répété à l'échelle industrielle.
 
 ## La prédiction
 
-Pour un vecteur d'entrée \`x\` (par exemple : les features d'une critique de film), des poids \`w\` et un biais \`b\` :
+Pour un vecteur d'entrée \`x\` (par exemple les features d'une critique de film), des poids \`w\` et un biais \`b\` :
 
 \`\`\`
 z = w @ x + b          # le "logit" : un score brut, de -inf à +inf
 p = sigmoid(z)         # une probabilité, entre 0 et 1
 \`\`\`
 
-La **sigmoïde** écrase le score en probabilité :
+La **sigmoïde** écrase le score brut en une probabilité :
 
 \`\`\`
 sigmoid(z) = 1 / (1 + exp(-z))
 \`\`\`
 
-- \`z\` très négatif → p ≈ 0 (classe « négatif »)
-- \`z = 0\` → p = 0.5 (incertitude totale)
-- \`z\` très positif → p ≈ 1 (classe « positif »)
+- \`z\` très négatif → \`p ≈ 0\` (classe « négatif »),
+- \`z = 0\` → \`p = 0.5\` (incertitude totale),
+- \`z\` très positif → \`p ≈ 1\` (classe « positif »).
 
-## Ce que "apprendre" veut dire
+## Ce que « apprendre » veut dire
 
 Les poids \`w\` encodent l'importance de chaque feature : un poids positif pour « excellent », négatif pour « ennuyeux ». *Apprendre = trouver les bons poids* — c'est l'objet de la leçon suivante. Pour l'instant, on construit la machine à prédire.
 
-> Un LLM entier n'est que ce motif répété : des produits matriciels (des milliards de « neurones ») entrecoupés de non-linéarités. La sortie finale — softmax sur le vocabulaire — est la cousine multiclasse de cette sigmoïde.`,
+Retiens le vocabulaire : le mot **logit** que tu vois dans les API de LLM vient exactement d'ici — c'est le score brut *avant* la transformation en probabilité. La sortie finale d'un LLM (un softmax sur le vocabulaire) est simplement la cousine multiclasse de cette sigmoïde binaire.
+
+## Pourquoi la non-linéarité est indispensable
+
+Sans la sigmoïde (ou une autre non-linéarité comme ReLU), empiler des couches ne servirait à rien : la composition de fonctions linéaires reste linéaire (\`W₂(W₁x) = (W₂W₁)x\`, une seule couche déguisée). Ce sont les non-linéarités *entre* les couches qui donnent aux réseaux profonds — et aux transformers — leur pouvoir d'expression.
+
+## Pièges classiques
+
+- **Confondre logit et probabilité.** \`z\` n'est pas borné (de -inf à +inf) ; \`p\` vit entre 0 et 1. Une API qui te renvoie des « logits » ne te donne pas des probabilités : applique softmax/sigmoïde d'abord.
+- **Le seuil de 0,5 n'est pas sacré.** Classer « positif si p ≥ 0,5 » est un choix par défaut. Selon le coût métier des erreurs (fraude, cancer…), tu déplaceras ce seuil — c'est *ton* curseur, pas celui du modèle.
+- **Croire qu'un réseau sans activation est « plus simple ».** Il est surtout *inutile* : il ne peut apprendre que des frontières linéaires, aussi profond soit-il.`,
           },
           {
             kind: 'exercise',
@@ -262,25 +272,27 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Comment un modèle apprend
 
-L'entraînement de *tous* les modèles — de la régression logistique à GPT — suit la même boucle :
+L'entraînement de *tous* les modèles — de la régression logistique à GPT — suit la même boucle. La comprendre une fois, à la main, c'est acquérir le modèle mental qui te permettra de déboguer n'importe quel entraînement dans ta carrière.
 
-1. **Prédire** avec les poids actuels,
-2. **Mesurer l'erreur** avec une fonction de perte (*loss*),
-3. **Calculer le gradient** : dans quelle direction bouger chaque poids pour réduire la perte,
-4. **Mettre à jour** : \`w = w - lr * gradient\` (lr = *learning rate*),
-5. Recommencer.
+## La boucle universelle
 
-## La perte : entropie croisée binaire
+1. **prédire** avec les poids actuels,
+2. **mesurer l'erreur** avec une fonction de perte (*loss*),
+3. **calculer le gradient** : dans quelle direction bouger chaque poids pour réduire la perte,
+4. **mettre à jour** : \`w = w - lr × gradient\` (lr = *learning rate*, le taux d'apprentissage),
+5. recommencer.
+
+## La perte : l'entropie croisée binaire
 
 Pour des probabilités \`p\` et des étiquettes \`y\` (0 ou 1) :
 
 \`\`\`
-loss = -moyenne( y*log(p) + (1-y)*log(1-p) )
+loss = -moyenne( y·log(p) + (1-y)·log(1-p) )
 \`\`\`
 
-Elle punit sévèrement une prédiction *confiante et fausse* (log(petit) → très négatif). C'est la même famille de perte que celle qui entraîne les LLM (entropie croisée sur le prochain token).
+Elle punit sévèrement une prédiction *confiante et fausse* : \`log(tout petit)\` est très négatif. C'est la même famille de perte qui entraîne les LLM (entropie croisée sur le prochain token) — tu apprends ici la version minimale d'un mécanisme universel.
 
-## Le gradient (offert, pour cette fois)
+## Le gradient, offert pour cette fois
 
 Pour la régression logistique, le calcul donne des formules remarquablement simples :
 
@@ -290,7 +302,17 @@ grad_w = X.T @ erreur / n             # (d,)
 grad_b = erreur.mean()                # scalaire
 \`\`\`
 
-L'intuition : chaque poids est corrigé proportionnellement à *(l'erreur) × (la feature qui y a contribué)*. En pratique, PyTorch calcule ces gradients automatiquement (\`loss.backward()\`) — mais les avoir écrits une fois à la main change ta compréhension de tout le reste.`,
+L'intuition : chaque poids est corrigé proportionnellement à *(l'erreur commise) × (la feature qui y a contribué)*. En pratique, PyTorch calcule ces gradients automatiquement (\`loss.backward()\`) — mais les avoir écrits une fois à la main change ta compréhension de tout le reste.
+
+## La descente de gradient, image mentale
+
+Imagine la perte comme un paysage vallonné et tes poids comme une bille. Le gradient pointe vers le *haut* de la pente ; on va donc dans le sens *opposé*, à petits pas (\`lr\`), pour descendre vers le fond de la vallée (la perte minimale).
+
+## Pièges classiques
+
+- **\`log(0)\` explose.** Si \`p\` vaut exactement 0 ou 1, le logarithme diverge. On « clippe » toujours \`p\` dans \`[1e-10, 1 - 1e-10]\` avant les log.
+- **Le learning rate, hyperparamètre le plus sensible.** Trop petit : l'entraînement est interminable. Trop grand : la bille rebondit hors de la vallée et la perte *diverge*. D'où les « lr schedules » (warmup, décroissance) de tous les papiers de LLM.
+- **Croire que la perte doit descendre à chaque pas.** Sur des données réelles et par mini-batchs, elle oscille en descendant. C'est la *tendance* qui compte, pas chaque valeur.`,
           },
           {
             kind: 'exercise',
@@ -539,28 +561,38 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Le péché originel du ML : s'évaluer sur ses données d'entraînement
 
-Ton classifieur du module précédent classe parfaitement… *les exemples sur lesquels il s'est entraîné*. Mais un modèle qui a mémorisé n'a rien appris : ce qui compte, c'est sa performance sur des données **jamais vues**. C'est LA distinction fondamentale : apprentissage vs **généralisation**.
+Ton classifieur de la leçon précédente classe parfaitement… *les exemples sur lesquels il s'est entraîné*. Mais un modèle qui a mémorisé n'a rien appris : ce qui compte, c'est sa performance sur des données **jamais vues**. Cette distinction — apprentissage contre **généralisation** — est la plus fondamentale de tout le machine learning, et celle qui démasque les faux « 99 % d'accuracy » annoncés en réunion.
 
 ## Le protocole minimal
 
 \`\`\`
-1. Mélanger les données (avec une graine fixée : reproductibilité)
+1. Mélanger les données (avec une graine fixée, pour la reproductibilité)
 2. Découper : ~80 % train / ~20 % test
-3. Entraîner sur train UNIQUEMENT
-4. Mesurer l'accuracy sur test — le seul chiffre qui compte
+3. Entraîner sur le TRAIN uniquement
+4. Mesurer l'accuracy sur le TEST — le seul chiffre qui compte
 \`\`\`
 
 ## Lire l'écart train/test
 
-- \`train ≈ test\`, tous deux bons → le modèle généralise ✓
-- \`train ≫ test\` → **overfitting** : le modèle a mémorisé du bruit. Remèdes : plus de données, modèle plus simple, régularisation.
+- \`train ≈ test\`, tous deux bons → le modèle **généralise** ✓
+- \`train ≫ test\` → **overfitting** : le modèle a mémorisé le bruit du train. Remèdes : plus de données, modèle plus simple, régularisation.
 - \`train\` déjà mauvais → **underfitting** : le modèle est trop simple pour le problème.
+
+L'écart train/test est un *thermomètre* : ne communique jamais le score de train comme performance du modèle — c'est l'erreur de débutant la plus répandue.
 
 ## Le mélange : une étape critique
 
-Si tes données sont ordonnées (tous les positifs puis tous les négatifs — très courant !), un découpage sans mélange met *toutes* les classes d'un côté. \`rng.permutation(n)\` génère des indices mélangés ; on indexe X et y avec **les mêmes** indices pour garder l'alignement exemple↔étiquette.
+Si tes données sont ordonnées (tous les positifs puis tous les négatifs — très courant !), un découpage sans mélange mettrait *toutes* les classes d'un même côté. \`rng.permutation(n)\` génère des indices mélangés ; on indexe \`X\` et \`y\` avec **les mêmes** indices pour préserver l'alignement exemple ↔ étiquette.
 
-> Ce protocole s'applique tel quel aux LLM : les jeux d'évaluation (module 13) doivent être disjoints des données de fine-tuning, et la *contamination* des benchmarks par les données d'entraînement est un problème majeur du domaine.`,
+## Le lien avec les LLM
+
+Ce protocole s'applique tel quel aux grands modèles : les jeux d'évaluation doivent être *disjoints* des données d'entraînement. Quand un LLM a « vu » les questions d'un benchmark pendant son pré-entraînement, son score est gonflé — c'est la **contamination**, le train/test violé à l'échelle du web.
+
+## Pièges classiques
+
+- **Mélanger \`X\` et \`y\` séparément.** Deux permutations différentes brisent l'alignement : chaque exemple se retrouve avec la mauvaise étiquette. Utilise les *mêmes* indices pour les deux.
+- **La fuite de données (data leakage).** Si une information du test « fuit » dans le train (doublons, normalisation calculée sur tout le dataset…), le score explose artificiellement. Le split se fait *avant* tout calcul dépendant des données.
+- **Oublier la graine aléatoire.** Sans graine fixée, chaque exécution donne un split différent et des résultats non reproductibles — impossible de comparer deux modèles équitablement.`,
           },
           {
             kind: 'exercise',

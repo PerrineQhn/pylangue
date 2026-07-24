@@ -16,7 +16,7 @@ export const m11: Module = {
             kind: 'text',
             md: `# Le format universel : une liste de messages
 
-Toutes les API LLM modernes (Anthropic, OpenAI, Mistral, modèles locaux via Ollama…) partagent la même structure de requête : une **liste de messages**, chacun avec un \`role\` et un \`content\` :
+Toutes les API LLM modernes (Anthropic, OpenAI, Mistral, modèles locaux via Ollama…) partagent la même structure de requête : une **liste de messages**, chacun avec un \`role\` et un \`content\`.
 
 \`\`\`
 messages = [
@@ -26,19 +26,28 @@ messages = [
 ]
 \`\`\`
 
-- \`system\` (ou paramètre dédié) : les instructions de cadrage — ton, format, contraintes
-- \`user\` / \`assistant\` : l'historique de conversation, en alternance
-- Le modèle est **sans état** : à chaque appel, tu renvoies *tout* l'historique. La « mémoire » d'un chatbot, c'est toi qui la gères, dans cette liste.
+- \`system\` (ou un paramètre dédié) : les instructions de cadrage — ton, format, contraintes.
+- \`user\` / \`assistant\` : l'historique de conversation, en alternance.
+
+## Le point le plus important : le modèle est SANS ÉTAT
+
+À chaque appel, tu renvoies *tout* l'historique. Le modèle ne « se souvient » de rien entre deux requêtes — la « mémoire » d'un chatbot, c'est **toi** qui la gères, dans cette liste de messages. C'est aussi pour ça que les longues conversations coûtent de plus en plus cher (module 3) : chaque tour renvoie tous les précédents.
 
 ## Les paramètres qui comptent
 
-- \`model\` : le modèle choisi (compromis coût / capacité / latence)
-- \`temperature\` : tu l'as implémentée au module 9 ! 0 → extraction fiable, ~1 → créativité
-- \`max_tokens\` : borne de longueur de la réponse (et de la facture)
+- \`model\` : le modèle choisi (compromis coût / capacité / latence),
+- \`temperature\` : tu l'as implémentée au module 9 ! \`0\` → extraction fiable et reproductible, \`~1\` → créativité,
+- \`max_tokens\` : la borne de longueur de la réponse (et de la facture).
 
 ## S'entraîner sans clé d'API
 
-Dans cette leçon, tu travailles avec \`MockLLM\`, un faux client qui reproduit fidèlement l'interface d'un vrai SDK. C'est une pratique professionnelle standard : on développe et on teste contre un *mock*, puis on branche le vrai client — l'interface étant identique, le reste du code ne change pas.`,
+Dans cette leçon, tu travailles avec un \`MockLLM\`, un faux client qui reproduit fidèlement l'interface d'un vrai SDK. C'est une pratique professionnelle standard : on développe et on teste contre un *mock* (rapide, gratuit, déterministe), puis on branche le vrai client — l'interface étant identique, le reste du code ne change pas.
+
+## Pièges classiques
+
+- **Oublier d'ajouter la réponse de l'assistant à l'historique.** Si tu n'appends pas la réponse, le modèle « oublie » ce qu'il vient de dire au tour suivant. Chaque échange, question ET réponse, doit rester dans la liste.
+- **Casser l'alternance des rôles.** La plupart des API attendent user/assistant en alternance stricte après le system. Deux \`user\` d'affilée, ou commencer par \`assistant\`, est souvent rejeté.
+- **Mettre les instructions dans un message user.** Les consignes de cadrage vont dans le \`system\` — c'est là que le modèle les traite avec le plus de poids.`,
           },
           {
             kind: 'exercise',
@@ -282,11 +291,11 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Le LLM comme composant logiciel
 
-Dans une vraie application, la sortie du LLM n'est pas lue par un humain : elle alimente **du code**. Il faut donc des sorties *structurées* (JSON) et un code *robuste* face aux réponses imparfaites.
+Dans une vraie application, la sortie du LLM n'est pas lue par un humain : elle alimente **du code**. Il faut donc des sorties *structurées* (JSON) et un code *robuste* face aux réponses imparfaites. Cette « couche de défiance » entre le modèle et ton programme, c'est ce qui distingue une démo d'un produit en production.
 
 ## Demander du JSON
 
-Le geste de base : spécifier le schéma dans le prompt.
+Le geste de base : spécifier le schéma directement dans le prompt.
 
 \`\`\`
 prompt = """Extrais du texte suivant un JSON avec les clés
@@ -296,7 +305,7 @@ Réponds UNIQUEMENT avec le JSON, sans texte autour.
 Texte : {texte}"""
 \`\`\`
 
-(Les API modernes offrent aussi des modes JSON garantis et le *function calling* / *tool use* — même principe, contraintes appliquées côté serveur.)
+Les API modernes offrent aussi des modes JSON garantis et le *function calling* / *tool use*, qui appliquent les contraintes côté serveur — même principe, exécution plus fiable.
 
 ## Le problème : le modèle « déborde »
 
@@ -308,9 +317,17 @@ Voici le JSON demandé :
 J'espère que cela vous aide !
 \`\`\`
 
-Un \`json.loads\` naïf explose. Le réflexe professionnel : **extraire** le JSON de la réponse (chercher le premier \`{\` et le dernier \`}\`), parser, **valider** les champs, et prévoir un plan B (nouvelle tentative, valeur par défaut, erreur explicite).
+Un \`json.loads\` naïf explose sur le texte autour. Le réflexe professionnel : **extraire** le JSON (chercher le premier \`{\` et le dernier \`}\`), parser dans un \`try/except\`, puis **valider** les champs, avec un plan B (nouvelle tentative, valeur par défaut, erreur explicite).
 
-> Cette « couche de défiance » entre le LLM et ton code, c'est ce qui distingue une démo d'un produit. Les bibliothèques comme Pydantic ou Instructor industrialisent exactement ça.`,
+## Valider n'est pas parser
+
+Un JSON *syntaxiquement* valide peut violer le *schéma* : le modèle peut inventer \`"sentiment": "mitigé"\` (hors de la liste autorisée) ou omettre une clé. Le parsing ne le détecte pas — il faut une validation explicite des valeurs. Les bibliothèques comme Pydantic ou Instructor industrialisent exactement ça ; le principe reste celui que tu vas coder.
+
+## Pièges classiques
+
+- **\`json.loads\` sur la réponse brute.** Le moindre mot autour du JSON le fait planter. Extrais d'abord le bloc \`{...}\`, parse ensuite.
+- **Attraper toutes les exceptions.** Attrape précisément \`json.JSONDecodeError\` : un \`except:\` nu masquerait de vrais bugs de ton code.
+- **Faire confiance à un JSON valide.** Syntaxe correcte ≠ schéma respecté. Valide toujours la présence des clés et le domaine des valeurs avant d'alimenter ton système avec.`,
           },
           {
             kind: 'exercise',
@@ -564,19 +581,31 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# L'économie des tokens : la compétence invisible
 
-Une application LLM en production vit sous trois contraintes chiffrées : le **coût** (facturé au million de tokens, entrée et sortie à des tarifs différents), la **fenêtre de contexte** (au-delà, l'API refuse), et la **latence** (proportionnelle aux tokens générés). Savoir estimer et maîtriser ces chiffres est ce qui sépare le prototype du produit rentable.
+Une application LLM en production vit sous trois contraintes chiffrées : le **coût** (facturé au million de tokens, entrée et sortie à des tarifs différents), la **fenêtre de contexte** (au-delà, l'API refuse la requête), et la **latence** (proportionnelle aux tokens générés). Savoir estimer et maîtriser ces chiffres est ce qui sépare le prototype du produit rentable — et le genre de slide qui plaît beaucoup aux directions.
 
 ## Estimer sans tokenizer
 
-L'ordre de grandeur à connaître : **~4 caractères par token** en anglais, un peu plus en français. Pour dimensionner, l'estimation \`len(texte) // 4\` suffit largement — les bibliothèques officielles (tiktoken…) donnent le compte exact quand il le faut.
+L'ordre de grandeur à connaître : **~4 caractères par token** en anglais, un peu plus en français. Pour dimensionner rapidement, \`len(texte) // 4\` suffit largement — les bibliothèques officielles (tiktoken…) donnent le compte exact quand la précision compte.
 
 ## Le coût d'une conversation qui s'allonge
 
-Souviens-toi du module 11 : l'API est sans état, on renvoie *tout l'historique à chaque tour*. Conséquence arithmétique brutale : le coût d'une conversation croît **quadratiquement** avec le nombre de tours — le tour 20 renvoie les 19 précédents. D'où les stratégies de production :
+Souviens-toi du module 1 : l'API est sans état, on renvoie *tout l'historique à chaque tour*. La conséquence arithmétique est brutale — le coût d'entrée d'une conversation croît **quadratiquement** avec le nombre de tours, car le tour 20 renvoie les 19 précédents. La somme \`1 + 2 + … + n\` vaut \`n²/2\` : voilà la surprise des factures de chatbots.
 
-- **Troncature** : ne garder que les derniers messages qui tiennent dans un budget de tokens (en préservant TOUJOURS le message system !),
-- **Résumé** : compresser les vieux tours en un résumé,
-- **Prompt caching** : les préfixes stables (system, exemples) sont facturés à prix réduit s'ils ne changent pas — une raison de plus de structurer ses prompts avec le stable au début.`,
+D'où trois stratégies de production :
+
+- **troncature** : ne garder que les derniers messages tenant dans un budget (en préservant *toujours* le message system) ;
+- **résumé** : compresser les vieux tours en un résumé compact ;
+- **prompt caching** : les préfixes stables (system, exemples) sont facturés à prix réduit s'ils ne changent pas d'un appel à l'autre.
+
+## Le réflexe d'architecture
+
+Puisque le prompt caching fonctionne par *préfixe exact*, structure tes prompts du **stable vers le variable** : system et exemples en tête (cachés), contenu changeant à la fin. Une optimisation de coût quasi gratuite.
+
+## Pièges classiques
+
+- **Tronquer le message system.** C'est le seul message qui doit *toujours* survivre à la troncature : il porte les instructions. Garde-le, coupe le milieu.
+- **Ignorer la croissance quadratique.** Un chatbot « pas cher » sur 3 tours peut devenir ruineux sur 30. Anticipe le résumé d'historique dès la conception.
+- **Confondre tokens d'entrée et de sortie.** Ils ont des tarifs différents (la sortie coûte souvent 3 à 5 fois plus). Estime-les séparément dans tes projections.`,
           },
           {
             kind: 'exercise',

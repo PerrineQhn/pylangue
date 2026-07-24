@@ -16,23 +16,25 @@ export const m9: Module = {
             kind: 'text',
             md: `# « Attention Is All You Need »
 
-Le papier de 2017 qui a donné naissance aux transformers — donc à GPT, Claude, Llama, Gemini — repose sur une idée qu'on peut implémenter en NumPy avec ce que tu sais déjà : des produits scalaires et une normalisation.
+Le papier de 2017 qui a donné naissance aux transformers — donc à GPT, Claude, Llama, Gemini — repose sur une idée qu'on peut implémenter en NumPy avec ce que tu sais déjà : des produits scalaires et une normalisation. Cette leçon pose la première pierre : le **softmax**, l'opération qui transforme des scores bruts en poids d'attention.
 
 ## L'intuition
 
-Pour comprendre le mot « le » dans « le chat noir dort », un modèle doit savoir **quels autres mots regarder**. L'attention calcule, pour chaque token, une **moyenne pondérée** des autres tokens — où les poids reflètent la *pertinence*, mesurée par… un produit scalaire (module 5 !).
+Pour comprendre le mot « le » dans « le chat noir dort », un modèle doit savoir *quels autres mots regarder*. L'attention calcule, pour chaque token, une **moyenne pondérée** des autres tokens — où les poids reflètent la pertinence, mesurée par un produit scalaire (leçon du module 5 !). Mais un produit scalaire donne des scores quelconques : le softmax les convertit en poids propres à une moyenne.
 
-## Étape 1 : softmax, transformer des scores en poids
+## Étape 1 : softmax, des scores aux poids
 
-Les produits scalaires donnent des scores quelconques : \`[2.1, -0.3, 0.8]\`. Pour en faire des **poids de moyenne** (positifs, somme = 1), on applique softmax :
+Les produits scalaires donnent des scores comme \`[2.1, -0.3, 0.8]\`. Pour en faire des poids (positifs, de somme 1), on applique le softmax :
 
 \`\`\`
 softmax(x)ᵢ = exp(xᵢ) / Σⱼ exp(xⱼ)
 \`\`\`
 
-## Le piège numérique (classique en entretien !)
+Chaque score passe par l'exponentielle (qui le rend positif), puis on divise par la somme (qui ramène le total à 1). Les scores élevés reçoivent la part du lion, les faibles presque rien.
 
-\`exp(1000)\` déborde en \`inf\`. La solution, utilisée dans *toutes* les implémentations réelles : soustraire le max avant l'exponentielle. Mathématiquement identique (ça se simplifie dans la fraction), numériquement stable :
+## Le piège numérique (question d'entretien classique !)
+
+\`exp(1000)\` déborde en \`inf\`. La solution, utilisée dans *toutes* les implémentations réelles : soustraire le maximum avant l'exponentielle. Mathématiquement identique (le facteur se simplifie dans la fraction), numériquement stable :
 
 \`\`\`
 def softmax(x):
@@ -40,7 +42,15 @@ def softmax(x):
     return e / e.sum()
 \`\`\`
 
-> Ce même softmax sert aussi à convertir les *logits* d'un LLM en probabilités sur le prochain token — c'est là qu'agit le paramètre \`temperature\` : on divise les scores par T avant le softmax. T petit → distribution piquée (déterministe) ; T grand → distribution plate (créatif).`,
+## Le lien avec la température
+
+Ce même softmax convertit les *logits* d'un LLM en probabilités sur le prochain token. C'est là qu'agit le paramètre \`temperature\` : on divise les scores par \`T\` avant le softmax. \`T\` petit → distribution piquée (déterministe) ; \`T\` grand → distribution plate (créatif). Tu implémenteras exactement ce mécanisme.
+
+## Pièges classiques
+
+- **Oublier de soustraire le max.** Sans cette stabilisation, de grands logits produisent \`inf\` puis \`NaN\`, et tout l'entraînement se corrompt en silence.
+- **Diviser par la température au mauvais moment.** La température divise les logits *avant* le softmax, pas les probabilités après. L'ordre change tout.
+- **Croire que softmax « choisit » un token.** Il produit une *distribution* ; c'est l'échantillonnage (module 10) qui choisit ensuite — greedy, température, top-p.`,
           },
           {
             kind: 'exercise',
@@ -234,28 +244,38 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Q, K, V : requêtes, clés, valeurs
 
-La self-attention se décrit avec une métaphore de moteur de recherche interne à la phrase :
+La self-attention se décrit avec une métaphore de moteur de recherche interne à la phrase. Chaque token joue simultanément trois rôles :
 
-- **Query (Q)** : ce que chaque token *cherche* (« je suis "le", je cherche mon nom »)
-- **Key (K)** : ce que chaque token *offre* comme identité (« je suis un nom commun »)
-- **Value (V)** : l'information que chaque token *transmet* si on le regarde
+- **Query (Q)** : ce que le token *cherche* (« je suis "le", je cherche mon nom »),
+- **Key (K)** : ce que le token *offre* comme identité (« je suis un nom commun »),
+- **Value (V)** : l'information que le token *transmet* si on décide de le regarder.
 
-Chaque token est projeté en trois vecteurs (par des matrices apprises \`W_q, W_k, W_v\` — ici on les suppose déjà appliquées).
+Chaque token est projeté en ces trois vecteurs par des matrices apprises \`W_q, W_k, W_v\` (ici, on les suppose déjà appliquées, pour se concentrer sur le mécanisme).
 
 ## La formule complète
 
 \`\`\`
-Attention(Q, K, V) = softmax(Q @ K.T / sqrt(d)) @ V
+Attention(Q, K, V) = softmax(Q @ K.T / √d) @ V
 \`\`\`
 
-Décomposons pour \`n\` tokens de dimension \`d\` :
+Décomposons-la pour \`n\` tokens de dimension \`d\`, étape par étape :
 
-1. \`Q @ K.T\` → matrice \`(n, n)\` : le score de chaque token envers chaque autre. **Un produit scalaire par paire de tokens** — tu sais déjà que produit scalaire = similarité.
-2. \`/ sqrt(d)\` : sans cette division, les scores grandissent avec la dimension et saturent le softmax (gradients minuscules). C'est le « scaled » de *scaled dot-product attention*.
-3. \`softmax\` **ligne par ligne** : chaque token convertit ses scores en poids qui somment à 1.
+1. \`Q @ K.T\` → une matrice \`(n, n)\` : le score de chaque token envers chaque autre. **Un produit scalaire par paire de tokens** — et tu sais que produit scalaire = similarité.
+2. \`/ √d\` : sans cette division, les scores grandissent avec la dimension et saturent le softmax (les gradients deviennent minuscules). C'est le « scaled » de *scaled dot-product attention*.
+3. \`softmax\` **ligne par ligne** : chaque token convertit ses scores en poids qui somment à 1 (la leçon précédente).
 4. \`@ V\` : chaque token repart avec une moyenne pondérée des valeurs des autres.
 
-Trente lignes de NumPy, et tu as le cœur d'un LLM. Le reste d'un transformer (module 10) : plusieurs « têtes » d'attention en parallèle, des couches empilées, des MLP, des normalisations.`,
+Trente lignes de NumPy, et tu tiens le cœur d'un LLM. Le reste d'un transformer (module 10) n'est qu'un habillage : plusieurs « têtes » en parallèle, des couches empilées, des MLP, des normalisations.
+
+## Le coût quadratique
+
+\`Q @ K.T\` est une matrice \`(n, n)\` : pour \`n\` tokens, c'est \`n²\` scores. C'est le fameux **coût quadratique** de l'attention, celui qui rend les longs contextes chers et motive le KV-cache, la flash attention et les variantes efficientes.
+
+## Pièges classiques
+
+- **Transposer la mauvaise matrice.** C'est \`K.T\` qu'il faut, pour obtenir \`(n, d) @ (d, n) → (n, n)\`. Une erreur de transposition donne une shape fausse — imprime-la pour vérifier.
+- **Softmax sur le mauvais axe.** Le softmax s'applique *par ligne* (\`axis=1\`) : chaque token normalise SON attention. Sur les colonnes, le sens est perdu.
+- **Oublier le \`√d\`.** Sans lui, en grande dimension le softmax devient quasi one-hot et les gradients s'évanouissent — le modèle n'apprend plus.`,
           },
           {
             kind: 'code',
@@ -522,26 +542,34 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# La pièce qui fait de l'attention un GPT
 
-Ton attention laisse chaque token regarder *tous* les autres — y compris ceux qui viennent après. Pour un modèle qui **prédit le token suivant**, c'est de la triche : à l'entraînement, le token 3 verrait la réponse (le token 4) juste à côté. Les modèles de type GPT sont dits **causaux** : chaque position ne peut regarder que le passé.
+Ton attention laisse chaque token regarder *tous* les autres — y compris ceux qui viennent après. Pour un modèle qui **prédit le token suivant**, c'est de la triche : à l'entraînement, le token 3 verrait la réponse (le token 4) juste à côté de lui. Les modèles de type GPT sont dits **causaux** : chaque position ne peut regarder que le passé et le présent, jamais le futur.
 
 ## L'implémentation : un masque à -inf
 
 L'astuce est d'une élégance rare. Avant le softmax, on remplace les scores des positions futures par \`-inf\` :
 
 \`\`\`
-scores[i, j] = -inf   pour j > i     (le futur, interdit)
+scores[i, j] = -inf   pour tout j > i     (le futur, interdit)
 \`\`\`
 
-Or \`exp(-inf) = 0\` : après softmax, les poids du futur sont **exactement zéro**, et les poids restants se renormalisent tout seuls entre eux. Aucune règle spéciale, la formule fait tout.
+Or \`exp(-inf) = 0\` : après le softmax, les poids du futur sont **exactement zéro**, et les poids restants se renormalisent automatiquement entre eux. Aucune règle spéciale à écrire — la formule fait tout le travail.
 
 \`\`\`
-masque = np.triu(np.ones((n, n)), k=1)   # triangle supérieur strict
+masque = np.triu(np.ones((n, n)), k=1)   # triangle supérieur strict = le futur
 scores = np.where(masque == 1, -np.inf, scores)
 \`\`\`
 
 ## Pourquoi c'est fondamental
 
-C'est ce masque qui permet l'entraînement massivement parallèle des GPT : une phrase de n tokens fournit n exercices de prédiction *simultanés* (chaque position prédit la suivante), calculés en un seul passage de matrices. Sans le masque, il faudrait un passage par position. Le même masque explique aussi le KV-cache à l'inférence : le passé ne changeant jamais, on le calcule une seule fois.`,
+C'est ce masque qui permet l'entraînement **massivement parallèle** des GPT. Une phrase de \`n\` tokens fournit \`n\` exercices de prédiction *simultanés* (chaque position prédit la suivante), calculés en un seul passage matriciel. Sans le masque, il faudrait un passage par position — c'est précisément l'avantage décisif des transformers sur les anciens RNN, qui avançaient token par token.
+
+Le même masque explique le **KV-cache** à l'inférence : le passé ne changeant jamais, on le calcule une seule fois et on le réutilise pour chaque nouveau token.
+
+## Pièges classiques
+
+- **\`-inf\` avant le softmax, pas 0 après.** Mettre les poids à 0 *après* le softmax casserait la normalisation (la somme ne ferait plus 1). Le \`-inf\` *avant* laisse le softmax renormaliser proprement le passé.
+- **Se tromper de triangle.** \`np.triu(..., k=1)\` désigne le triangle *strictement* supérieur — le futur. Avec \`k=0\`, on masquerait aussi la diagonale (le token lui-même), ce qui est faux.
+- **Croire que la causalité concerne l'inférence seule.** Elle est surtout cruciale à l'entraînement : c'est elle qui garantit que le modèle apprend à *prédire* sans jamais copier la réponse.`,
           },
           {
             kind: 'exercise',

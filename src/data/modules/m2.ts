@@ -229,51 +229,55 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Pourquoi des classes en NLP ?
 
-Quand tu utilises Hugging Face, tu écris \`tokenizer = AutoTokenizer.from_pretrained(...)\` puis \`tokenizer.encode(texte)\`. Ce \`tokenizer\` est un **objet** : il regroupe des *données* (le vocabulaire) et des *comportements* (encoder, décoder). Aujourd'hui, tu construis le tien.
+Quand tu utilises Hugging Face, tu écris \`tokenizer = AutoTokenizer.from_pretrained(...)\` puis \`tokenizer.encode(texte)\`. Ce \`tokenizer\` est un **objet** : il réunit au même endroit des *données* (le vocabulaire appris) et des *comportements* (encoder, décoder). C'est exactement ce que permet une **classe** — un moule qui regroupe état et actions. Aujourd'hui, tu construis le tien, et tu comprendras de l'intérieur tous les outils que tu utilises.
+
+## L'intuition : un moule et ses exemplaires
+
+Une classe est un *plan de fabrication* ; chaque objet créé à partir d'elle est une *instance*, avec son propre état. Deux tokenizers fabriqués depuis la même classe ont chacun leur vocabulaire — l'un peut être français, l'autre anglais, sans interférence.
 
 ## Anatomie d'une classe
 
 \`\`\`
 class Tokenizer:
-    def __init__(self):          # constructeur
-        self.vocab = {}          # état interne : mot -> id
+    def __init__(self):          # le constructeur, appelé à la création
+        self.vocab = {}          # l'état interne : mot -> identifiant
 
     def fit(self, texte):        # apprendre le vocabulaire
         for mot in texte.lower().split():
             if mot not in self.vocab:
                 self.vocab[mot] = len(self.vocab)
 
-    def encode(self, texte):     # texte -> liste d'ids
+    def encode(self, texte):     # transformer un texte en liste d'ids
         ...
 \`\`\`
 
-- \`self\` désigne l'instance : \`self.vocab\` est propre à chaque tokenizer.
-- \`fit\` / \`encode\` / \`decode\` : cette interface en trois temps est **exactement** celle des vrais outils (scikit-learn, tokenizers HF).
+Le mot \`self\` désigne *l'instance courante* : \`self.vocab\` est le vocabulaire de CE tokenizer précis. Chaque méthode reçoit \`self\` en premier paramètre — c'est ainsi que l'objet accède à son propre état.
+
+L'interface en trois temps **\`fit\` / \`encode\` / \`decode\`** n'est pas arbitraire : c'est *exactement* celle des vrais outils (scikit-learn, les tokenizers de Hugging Face). La maîtriser te rend capable d'en écrire, mais surtout de lire et déboguer ceux des autres.
 
 ## Le token inconnu : \`<unk>\`
 
-Que faire d'un mot jamais vu à l'entraînement ? Les vocabulaires réels réservent un id spécial \`<unk>\` (unknown). Les tokenizers modernes (BPE, module 8) contournent le problème en découpant les mots inconnus en sous-mots — mais le concept de token spécial (\`<unk>\`, \`<pad>\`, \`<eos>\`…) reste central dans tous les LLM.
+Que faire d'un mot jamais vu à l'entraînement ? Les vocabulaires réels réservent un identifiant spécial \`<unk>\` (unknown). Les tokenizers modernes (BPE, module 8) réduisent le besoin de \`<unk>\` en découpant les mots inconnus en sous-mots — mais le concept de **token spécial** (\`<unk>\`, \`<pad>\` pour le remplissage, \`<eos>\` pour la fin de séquence…) reste central dans tous les LLM. Réserver l'identifiant \`0\` à \`<unk>\` est une convention commode.
 
 ## Les méthodes spéciales : parler le langage de Python
 
-Les méthodes encadrées de doubles underscores (*dunder*) branchent ta classe sur la syntaxe du langage :
+Les méthodes encadrées de doubles underscores (les *dunder*) branchent ta classe sur la syntaxe du langage :
 
 \`\`\`
-def __len__(self):          # active len(tokenizer)
+def __len__(self):            # active len(tokenizer)
     return len(self.vocab)
-
-def __repr__(self):         # ce qui s'affiche avec print(tokenizer)
-    return f"Tokenizer(vocab={len(self.vocab)} tokens)"
 
 def __contains__(self, mot):  # active : "chat" in tokenizer
     return mot in self.vocab
 \`\`\`
 
-C'est pour ça que \`len(dataset)\`, \`model in registry\` ou \`print(config)\` « marchent » sur les objets des bibliothèques ML : leurs auteurs ont implémenté ces méthodes. Les connaître, c'est savoir lire — et écrire — des API naturelles.
+C'est grâce à elles que \`len(dataset)\`, \`model in registry\` ou \`print(config)\` fonctionnent sur les objets des bibliothèques ML : leurs auteurs ont implémenté ces méthodes. Les connaître, c'est savoir concevoir des API naturelles à utiliser.
 
-## Robustesse : penser aux entrées hostiles
+## Pièges classiques
 
-Un vrai \`decode\` reçoit un jour un id qui n'existe pas (bug amont, fichier corrompu, version de vocab différente). Deux philosophies : lever une erreur claire, ou dégrader proprement vers \`<unk>\`. L'important est de **choisir explicitement** — le crash cryptique trois couches plus loin est la pire option.`,
+- **Oublier \`self\`.** Écrire \`vocab\` au lieu de \`self.vocab\` dans une méthode crée une variable locale qui disparaît aussitôt — l'état de l'objet n'est jamais modifié. Erreur numéro un des débutants en POO.
+- **Partager un état mutable entre instances.** Ne mets jamais \`def __init__(self, vocab={})\` : le dictionnaire par défaut serait *partagé* par toutes les instances. Initialise l'état DANS \`__init__\` (\`self.vocab = {}\`).
+- **Un \`decode\` fragile.** Recevoir un identifiant absent du vocabulaire est inévitable en production (fichier corrompu, mauvaise version). Décide explicitement : lever une erreur claire, ou dégrader vers \`<unk>\`. Le crash cryptique trois couches plus loin est la pire option.`,
           },
           {
             kind: 'exercise',

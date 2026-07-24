@@ -16,24 +16,34 @@ export const m8: Module = {
             kind: 'text',
             md: `# Le problème du vocabulaire ouvert
 
-Ton tokenizer du module 2 a une faille béante : tout mot jamais vu devient \`<unk>\`. Or la langue invente sans cesse (« rebasculer », noms propres, code, typos). À l'opposé, tokeniser caractère par caractère marche toujours… mais produit des séquences interminables que les modèles peinent à traiter.
+Ton tokenizer du module 2 avait une faille béante : tout mot jamais vu devenait \`<unk>\`. Or la langue invente sans cesse — « rebasculer », noms propres, code, fautes de frappe, emojis. À l'opposé, tokeniser caractère par caractère fonctionne toujours… mais produit des séquences interminables que les modèles peinent à traiter.
 
-**BPE (Byte-Pair Encoding)** est le compromis qui a gagné : partir des caractères, puis **fusionner itérativement la paire adjacente la plus fréquente** du corpus, jusqu'à la taille de vocabulaire voulue.
+**BPE (Byte-Pair Encoding)** est le compromis qui a gagné, et que tu utilises à chaque appel de GPT, Llama, Claude ou Mistral : partir des caractères, puis **fusionner itérativement la paire de symboles adjacents la plus fréquente**, jusqu'à atteindre la taille de vocabulaire voulue.
 
-## L'algorithme d'entraînement
+## L'algorithme d'entraînement, en 4 temps
 
 \`\`\`
-1. Découpe chaque mot en caractères : "lower" -> l o w e r
-2. Compte toutes les paires adjacentes dans le corpus
-3. Fusionne la paire la plus fréquente partout : (l, o) -> "lo"
-4. Retourne en 2, jusqu'à N fusions
+1. Découper chaque mot en caractères :  "lower" -> l o w e r
+2. Compter toutes les paires adjacentes dans le corpus
+3. Fusionner la paire la plus fréquente, partout :  (l, o) -> "lo"
+4. Retourner en 2, jusqu'à N fusions
 \`\`\`
 
-Les fusions apprises reflètent la statistique de la langue : \`er\`, \`ing\`, \`tion\` émergent tôt en anglais. Les mots fréquents finissent en un seul token ; les mots rares restent découpés en sous-unités — mais *jamais* en \`<unk>\`.
+Les fusions apprises reflètent la statistique de la langue : \`er\`, \`ing\`, \`tion\` émergent très tôt en anglais. Les mots fréquents finissent en un seul token ; les mots rares restent découpés en sous-unités — mais *jamais* en \`<unk>\`, puisque au pire on retombe sur les caractères de base.
 
-## Concrètement chez les LLM
+## Pourquoi ça te concerne directement
 
-GPT, Llama, Claude, Mistral : tous utilisent des variantes de BPE (souvent au niveau *octet*, d'où « byte »-pair). Le vocabulaire (~50k à 260k tokens) et la liste ordonnée des fusions **sont** le tokenizer. C'est pour ça qu'un mot rare ou une langue peu dotée « coûte » plus de tokens — et pourquoi compter les caractères d'un mot est difficile pour un LLM : il ne voit même pas les caractères.`,
+Le vocabulaire (de ~50 000 à ~260 000 tokens) et la liste ordonnée des fusions **sont** le tokenizer d'un LLM. C'est ce qui explique trois comportements que tu observes en vrai :
+
+- un mot rare ou une langue peu dotée « coûte » plus de tokens (donc plus cher, plus lent, et remplit la fenêtre de contexte plus vite) ;
+- compter les lettres d'un mot est difficile pour un LLM — il ne *voit* même pas les caractères, seulement des sous-mots ;
+- les nombres et les identifiants (« AB-2024-XL ») se découpent parfois de façon absurde, d'où des erreurs surprenantes.
+
+## Pièges classiques
+
+- **Compter les occurrences, pas les mots.** Chaque paire se compte *pondérée par la fréquence du mot* qui la contient : la paire \`(l, o)\` dans un mot vu 500 fois compte pour 500.
+- **BPE ≠ découpage par espaces.** Un token n'est ni un mot ni une syllabe : c'est une sous-unité purement statistique, apprise sur le corpus. « the » peut être un token, « anticonstitutionnellement » en compter dix.
+- **Le vocabulaire n'est pas universel.** Un tokenizer entraîné sur de l'anglais découpe mal le thaï ou le finnois. Le tokenizer et le modèle forment un couple indissociable.`,
           },
           {
             kind: 'exercise',
@@ -233,7 +243,9 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# La boucle d'entraînement BPE
 
-Il te manque une seule brique : **appliquer** une fusion au corpus. Fusionner la paire \`("l","o")\` transforme \`("l","o","w")\` en \`("lo","w")\` — partout, dans tous les mots.
+Il te manque une seule brique pour un BPE complet : **appliquer** une fusion au corpus. Fusionner la paire \`("l","o")\` transforme \`("l","o","w")\` en \`("lo","w")\` — partout, dans tous les mots à la fois.
+
+## Fusionner un mot
 
 \`\`\`
 def fusionner_mot(mot, paire):
@@ -243,16 +255,39 @@ def fusionner_mot(mot, paire):
     while i < len(mot):
         if i < len(mot) - 1 and (mot[i], mot[i+1]) == paire:
             nouveau.append(mot[i] + mot[i+1])   # concatène les 2 symboles
-            i += 2                               # saute la paire
+            i += 2                               # saute la paire fusionnée
         else:
             nouveau.append(mot[i])
             i += 1
     return tuple(nouveau)
 \`\`\`
 
-L'entraînement complet est alors une boucle de N itérations : compter les paires (leçon 1) → prendre la meilleure → l'appliquer partout → mémoriser la fusion dans une liste ordonnée. Cette **liste ordonnée de fusions** est le produit final : c'est elle qu'on rejoue, dans le même ordre, pour tokeniser un texte nouveau.
+Le parcours avance de 2 quand il fusionne, de 1 sinon — c'est ce qui évite de refusionner un symbole déjà traité.
 
-> Le vrai tokenizer de GPT-2 tient en ~300 lignes de Python et fait exactement ça (au niveau octet, avec une regex de pré-découpage — celle du module 3 !). Après cet exercice, tu peux le lire dans le texte.`,
+## L'entraînement complet
+
+L'algorithme entier est alors une boucle de N itérations :
+
+\`\`\`
+compter les paires  ->  prendre la plus fréquente  ->  l'appliquer partout
+->  la mémoriser dans une liste ordonnée  ->  recommencer
+\`\`\`
+
+Cette **liste ordonnée de fusions** est le produit final : c'est elle qu'on rejoue, dans le même ordre, pour tokeniser un texte nouveau (leçon suivante). Aucun réseau de neurones ici — le tokenizer est un algorithme purement déterministe, paramétré par sa liste de fusions.
+
+## Un détail qui compte : les collisions
+
+Après une fusion, deux mots différents peuvent devenir *identiques*. Si \`("lo","w")\` et \`("low",)\` coexistent après une fusion, il faut **additionner** leurs fréquences dans le nouveau corpus — sinon tu perds des occurrences et fausses les comptages suivants.
+
+## Où tu retrouveras ça
+
+Le vrai tokenizer de GPT-2 tient en ~300 lignes de Python et fait exactement ceci (au niveau *octet*, avec une regex de pré-découpage — celle du module 3 !). Après cet exercice, tu peux le lire dans le texte, ligne à ligne.
+
+## Pièges classiques
+
+- **Oublier d'additionner les fréquences en cas de collision.** C'est le bug silencieux classique : le corpus « rétrécit » incorrectement au fil des fusions.
+- **Ne pas gérer l'arrêt anticipé.** Quand tous les mots sont réduits à un seul symbole, il n'y a plus de paire à fusionner : la boucle doit s'arrêter, sinon \`max()\` sur un dictionnaire vide plante.
+- **Croire que l'ordre des fusions est secondaire.** Il est *sacré* : chaque fusion a été apprise sur un corpus où les précédentes étaient déjà appliquées.`,
           },
           {
             kind: 'exercise',
@@ -543,25 +578,38 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# La deuxième moitié du tokenizer
 
-Entraîner BPE produit une **liste ordonnée de fusions**. Mais comment tokeniser un texte *nouveau* — y compris des mots jamais vus à l'entraînement ? En **rejouant les fusions dans leur ordre d'apprentissage** :
+Entraîner BPE produit une **liste ordonnée de fusions**. Mais comment tokeniser un texte *nouveau* — y compris des mots jamais vus à l'entraînement ? En **rejouant les fusions dans leur ordre d'apprentissage**.
+
+## L'encodage, pas à pas
 
 \`\`\`
-mot nouveau : "lowest" -> l o w e s t
+mot nouveau : "lowest"  ->  l o w e s t
 fusion 1 ("e","r")  : rien à fusionner ici
 fusion 2 ("l","o")  : lo w e s t
 fusion 3 ("lo","w") : low e s t
 résultat : ["low", "e", "s", "t"]
 \`\`\`
 
-Le mot inconnu « lowest » se découpe en sous-unités connues — dont \`low\`, appris sur d'autres mots. **Aucun \`<unk>\`**, et les régularités morphologiques sont réutilisées : c'est toute la puissance de BPE.
+Le mot inconnu « lowest » se découpe en sous-unités *connues* — dont \`low\`, appris sur d'autres mots. **Aucun \`<unk>\`**, et les régularités morphologiques sont réutilisées : c'est toute la puissance de BPE.
 
-## Pourquoi l'ordre des fusions est sacré
+## Pourquoi l'ordre est sacré
 
-Chaque fusion a été apprise sur un corpus *où les précédentes étaient déjà appliquées*. Les rejouer dans le désordre produirait des découpages différents de ceux vus à l'entraînement du modèle — et un LLM reçoit alors des séquences de tokens qu'il n'a jamais rencontrées. C'est pourquoi un tokenizer est versionné avec son modèle, à l'octet près.
+Chaque fusion a été apprise sur un corpus *où les précédentes étaient déjà appliquées*. Les rejouer dans le désordre produirait des découpages différents de ceux vus à l'entraînement du modèle — et un LLM recevrait alors des séquences de tokens qu'il n'a jamais rencontrées, avec des résultats dégradés de façon silencieuse. C'est pourquoi un tokenizer est versionné *avec* son modèle, à l'octet près.
 
 ## Mesurer la « fertilité »
 
-Le nombre moyen de tokens par mot s'appelle la **fertilité** du tokenizer. Fertilité 1.1 = presque un token par mot (corpus bien couvert) ; fertilité 3 = mots pulvérisés (langue ou domaine mal couverts → contexte et budget gaspillés). C'est un chiffre à connaître quand on choisit un modèle pour une langue donnée.`,
+Le nombre moyen de tokens par mot s'appelle la **fertilité** du tokenizer :
+
+- fertilité ~1,1 → presque un token par mot (corpus bien couvert, typiquement l'anglais) ;
+- fertilité ~3 → mots pulvérisés (langue ou domaine mal couverts).
+
+Cette valeur se paie **trois fois** : en argent (facturation au token), en contexte (la fenêtre se remplit plus vite), en latence (plus de tokens à générer). C'est un critère de choix de modèle très concret pour une application multilingue — et un chiffre qui impressionne en comité d'architecture.
+
+## Pièges classiques
+
+- **Encoder sans respecter l'ordre des fusions.** Appliquer les fusions dans le mauvais ordre (ou seulement certaines) donne une tokenisation incohérente avec celle du modèle.
+- **Utiliser un tokenizer d'un autre modèle.** Chaque famille (GPT, Llama, Mistral) a son vocabulaire ; les mélanger produit du charabia côté modèle. Toujours le tokenizer *fourni avec* le modèle.
+- **Oublier que la fertilité dépend du corpus mesuré.** Un tokenizer « peu fertile » sur l'anglais peut l'être beaucoup sur ta langue cible : mesure-la sur *tes* données, pas sur un benchmark générique.`,
           },
           {
             kind: 'exercise',

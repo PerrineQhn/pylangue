@@ -16,9 +16,11 @@ export const m4: Module = {
             kind: 'text',
             md: `# Traiter plus gros que la RAM
 
-Un corpus d'entraînement fait souvent des dizaines de gigaoctets. Le charger entier dans une liste ? Impossible. La réponse pythonique : les **générateurs** — des fonctions qui *produisent* les éléments un par un, à la demande, avec \`yield\`.
+Un corpus d'entraînement fait souvent des dizaines de gigaoctets. Le charger entier dans une liste ? Impossible sur un laptop. La réponse pythonique : les **générateurs** — des fonctions qui *produisent* les éléments un par un, à la demande, avec \`yield\`, sans jamais tout garder en mémoire.
 
-## yield : produire sans accumuler
+## L'intuition : produire à la demande
+
+Une liste, c'est un entrepôt : tout est stocké d'un coup. Un générateur, c'est un robinet : l'eau ne coule que quand tu ouvres, goutte à goutte. Tant que personne n'itère, rien ne s'exécute.
 
 \`\`\`
 def lire_corpus(lignes):
@@ -28,11 +30,11 @@ def lire_corpus(lignes):
             yield ligne          # produit UNE valeur, puis se met en pause
 \`\`\`
 
-Appeler \`lire_corpus(...)\` n'exécute *rien* : ça renvoie un générateur. Le code ne tourne qu'au fil de l'itération (\`for\`, \`next()\`, \`list()\`). Mémoire utilisée : une ligne à la fois, pas le corpus entier.
+Appeler \`lire_corpus(...)\` n'exécute *rien* : ça crée un générateur. Le code ne tourne qu'au fil de l'itération (\`for\`, \`next()\`, \`list()\`). Mémoire utilisée : une ligne à la fois, pas le corpus entier.
 
-## Le pattern central du ML : les batches
+## Le motif central du ML : les batches
 
-Les GPU traitent les données par **lots** (batches). Tout data loader — y compris ceux de PyTorch — repose sur ce motif : accumuler jusqu'à la taille voulue, céder le lot, recommencer :
+Les GPU traitent les données par **lots** (batches). Tout data loader — y compris ceux de PyTorch — repose sur ce motif : accumuler jusqu'à la taille voulue, céder le lot, recommencer.
 
 \`\`\`
 def par_batch(elements, taille):
@@ -42,7 +44,7 @@ def par_batch(elements, taille):
         if len(batch) == taille:
             yield batch
             batch = []
-    if batch:            # le dernier lot, incomplet
+    if batch:            # le dernier lot, souvent incomplet
         yield batch
 \`\`\`
 
@@ -52,7 +54,13 @@ Comme une list comprehension, mais paresseuse — parenthèses au lieu de croche
 
 \`\`\`
 total_tokens = sum(len(l.split()) for l in lignes)   # aucun stockage intermédiaire
-\`\`\``,
+\`\`\`
+
+## Pièges classiques
+
+- **Un générateur ne se consomme qu'UNE fois.** Après un premier \`for\`, il est épuisé — un second \`for\` ne produit rien. Si tu dois le parcourir deux fois, matérialise-le avec \`list(...)\` (mais tu perds l'avantage mémoire).
+- **Oublier le dernier batch incomplet.** Sans le \`if batch: yield batch\` final, tu perds silencieusement les derniers éléments quand leur nombre n'est pas un multiple de la taille.
+- **Confondre \`[...]\` et \`(...)\`.** Les crochets construisent toute la liste en mémoire ; les parenthèses créent un générateur paresseux. Pour un \`sum()\` sur un gros flux, la version paresseuse évite le pic mémoire.`,
           },
           {
             kind: 'exercise',
@@ -227,7 +235,7 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Le code qui survit à la production
 
-Un pipeline qui appelle une API LLM sur 10 000 documents *va* rencontrer des erreurs : timeouts, rate limits, JSON malformé. La différence entre un script et un système, c'est ce qui se passe à ce moment-là.
+Un pipeline qui appelle une API LLM sur 10 000 documents *va* rencontrer des erreurs : timeouts, rate limits, JSON malformé. La différence entre un script de démo et un système, c'est ce qui se passe à ce moment-là. Un batch qui crashe au document 12 407 à 3 h du matin, c'est une matinée perdue ; un batch qui encaisse et reprend, c'est un job qu'on confie à un cron sans y penser.
 
 ## try / except : précis, jamais silencieux
 
@@ -238,22 +246,28 @@ except json.JSONDecodeError:      # on attrape PRÉCISÉMENT ce qu'on attend
     data = None                   # et on décide quoi faire
 \`\`\`
 
-Deux règles d'or : ne jamais attraper \`Exception\` à l'aveugle (ça masque les vrais bugs), et ne jamais laisser un \`except: pass\` silencieux.
+Deux règles d'or : ne jamais attraper \`Exception\` à l'aveugle (ça masque les vrais bugs — une faute de frappe, un \`None\` inattendu deviennent invisibles), et ne jamais laisser un \`except: pass\` silencieux (un pipeline qui « réussit » sur des données corrompues est pire qu'un crash).
 
 ## Le retry avec backoff : LE pattern des API LLM
 
-Les erreurs de rate limit (429) sont *normales* et *temporaires*. Le réflexe professionnel : réessayer en attendant de plus en plus longtemps (backoff exponentiel : 1 s, 2 s, 4 s…). Toutes les bibliothèques clientes le font ; savoir l'écrire soi-même est un classique d'entretien.
+Les erreurs de rate limit (429) sont *normales* et *temporaires*. Le réflexe professionnel : réessayer en attendant de plus en plus longtemps — backoff exponentiel : 1 s, 2 s, 4 s… Toutes les bibliothèques clientes le font ; savoir l'écrire soi-même est un classique d'entretien.
 
 ## Annotations de type : lire les signatures
 
-Les annotations ne changent pas l'exécution, mais documentent et permettent la vérification statique. Tu les liras partout dans les bibliothèques ML :
+Les annotations ne changent pas l'exécution, mais documentent et permettent la vérification statique :
 
 \`\`\`
 def encoder(textes: list[str], batch_size: int = 32) -> list[list[float]]:
     ...
 \`\`\`
 
-Ça se lit : « prend une liste de chaînes, renvoie une liste de vecteurs ». Les signatures typées sont la *documentation la plus fiable* d'une bibliothèque — souvent plus à jour que la doc elle-même.`,
+Ça se lit : « prend une liste de chaînes, renvoie une liste de vecteurs ». Les signatures typées sont souvent la *documentation la plus fiable* d'une bibliothèque ML — plus à jour que la doc elle-même — et le premier réflexe de lecture d'une API.
+
+## Pièges classiques
+
+- **\`except Exception: pass\`.** Il avale *toutes* les erreurs, y compris tes propres bugs, qui deviennent invisibles jusqu'à ce que tu les découvres dans les résultats, des semaines plus tard. Attrape précis, loggue toujours.
+- **Réessayer sans backoff.** Marteler une API rate-limitée immédiatement aggrave la surcharge (et la facture). L'attente croissante laisse le service respirer.
+- **Croire que les annotations sont vérifiées à l'exécution.** Python les *ignore* au runtime : \`def f(x: int)\` accepte une chaîne sans broncher. Ce sont des outils (mypy, pyright) et ton éditeur qui les exploitent.`,
           },
           {
             kind: 'exercise',
@@ -536,11 +550,21 @@ def encoder(texte): ...
 # strictement équivalent à : encoder = compter_appels(encoder)
 \`\`\`
 
-\`*args, **kwargs\` transmet n'importe quels arguments — l'enveloppe fonctionne pour toute signature.
+Le décorateur *emballe* la fonction d'origine dans une enveloppe qui ajoute un comportement, puis renvoie cette enveloppe. \`*args, **kwargs\` transmet n'importe quels arguments — l'enveloppe fonctionne pour toute signature.
 
 ## Le cas d'usage roi en LLM : la mémoïsation
 
-Appeler deux fois une API d'embeddings avec le *même* texte = payer deux fois pour le même résultat. Un décorateur \`@memoiser\` intercepte l'appel : si les arguments ont déjà été vus, renvoyer le résultat du **cache** sans appeler la fonction. C'est le principe du \`@lru_cache\` de la bibliothèque standard, des caches d'embeddings de production, et — côté serveur — du *prompt caching* des API LLM.`,
+Appeler deux fois une API d'embeddings avec le *même* texte = payer deux fois pour le même résultat. Un décorateur \`@memoiser\` intercepte l'appel : si les arguments ont déjà été vus, il renvoie le résultat du **cache** sans rappeler la fonction. C'est le principe du \`@lru_cache\` de la bibliothèque standard, des caches d'embeddings de production (souvent -30 à -70 % de coût sur un RAG réel), et — côté serveur — du *prompt caching* des API LLM.
+
+## Décorateurs paramétrés
+
+Un cran au-dessus : \`@limiter(3)\` autorise 3 appels puis bloque. C'est une *fabrique* de décorateurs — trois niveaux de fonctions imbriquées (une closure du module 2 !). Ce budget d'appels par fonction est le garde-fou de base des agents (module 13).
+
+## Pièges classiques
+
+- **\`return enveloppe()\` au lieu de \`return enveloppe\`.** Avec les parenthèses, tu *exécutes* l'enveloppe et renvoies son résultat, au lieu de renvoyer la fonction elle-même. Le décorateur ne marche plus.
+- **Oublier \`*args, **kwargs\`.** Une enveloppe qui ne transmet pas les arguments casse toute fonction qui en prend. Transmets-les à la déclaration *et* à l'appel.
+- **Mémoïser une fonction non pure.** Si la fonction dépend de l'heure, du réseau ou d'un état changeant, le cache renverra une valeur périmée. La mémoïsation ne vaut que pour les fonctions déterministes (mêmes arguments → même résultat).`,
           },
           {
             kind: 'exercise',

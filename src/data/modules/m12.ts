@@ -16,14 +16,15 @@ export const m12: Module = {
             kind: 'text',
             md: `# Pourquoi le RAG, et pourquoi le chunking d'abord
 
-Un LLM ne connaît ni tes documents internes, ni rien de postérieur à son entraînement. Le **RAG** (Retrieval-Augmented Generation) répond en deux temps : *retrouver* les passages pertinents dans ta base documentaire, puis les *injecter* dans le prompt pour que le modèle réponde en s'appuyant dessus.
+Un LLM ne connaît ni tes documents internes, ni rien de postérieur à son entraînement. Le **RAG** (Retrieval-Augmented Generation) répond en deux temps : *retrouver* les passages pertinents dans ta base documentaire, puis les *injecter* dans le prompt pour que le modèle réponde en s'appuyant dessus. C'est le pattern le plus demandé en entreprise aujourd'hui.
 
-Tout commence par le **chunking** : découper les documents en morceaux indexables. C'est l'étape la plus sous-estimée — et celle qui fait le plus souvent la différence entre un RAG qui marche et un RAG qui hallucine.
+Tout commence par le **chunking** : découper les documents en morceaux indexables. C'est l'étape la plus sous-estimée — et pourtant celle qui fait le plus souvent la différence entre un RAG qui répond juste et un RAG qui hallucine. Le choix de découpage pèse souvent plus lourd que le choix du LLM.
 
 ## Les deux paramètres clés
 
-- **Taille du chunk** : trop petit → le contexte est amputé (une phrase orpheline ne veut rien dire) ; trop grand → le retrieval devient imprécis et le prompt se remplit de bruit. Typiquement 200-800 tokens.
-- **Chevauchement (overlap)** : les chunks consécutifs partagent une marge (10-20 %) pour qu'une information à cheval sur une frontière ne soit jamais coupée en deux moitiés inutilisables.
+**La taille du chunk.** Trop petit → le contexte est amputé (une phrase orpheline ne veut rien dire). Trop grand → le retrieval devient imprécis (un chunk fourre-tout ressemble à tout et à rien) et le prompt se remplit de bruit. Typiquement 200 à 800 tokens.
+
+**Le chevauchement (overlap).** Les chunks consécutifs partagent une marge (10-20 %) pour qu'une information à cheval sur une frontière ne soit jamais coupée en deux moitiés inutilisables.
 
 \`\`\`
 Texte :   [ A B C D E F G H I J ]
@@ -33,9 +34,15 @@ chunk 2 : [ D E F G ]      # D répété : le chevauchement
 chunk 3 : [ G H I J ]
 \`\`\`
 
-## En production
+## En production : respecter la structure
 
-Les découpages réels respectent la *structure* : paragraphes, titres, cellules de tableau — plutôt que des fenêtres aveugles. Mais la fenêtre glissante avec chevauchement reste la base de référence, et c'est elle que tu implémentes aujourd'hui.`,
+Les découpages réels suivent la *structure* du document — paragraphes, titres, cellules de tableau — plutôt que des fenêtres aveugles. Mais la fenêtre glissante avec chevauchement reste la base de référence, celle que tu implémentes ici.
+
+## Pièges classiques
+
+- **Découper sans chevauchement.** « Le capital de la société [FRONTIÈRE] s'élève à 2 M€ » : sans overlap, aucun chunk ne contient l'information complète, et elle devient introuvable.
+- **Des chunks trop gros « pour ne rien perdre ».** L'embedding d'un chunk fourre-tout ne ressemble à rien de précis : il matche mal les questions pointues, et dilue l'attention du modèle sur le passage utile.
+- **Ignorer les métadonnées.** Un chunk sans sa source (nom du document, position) est inutilisable pour citer — or sans citation, une réponse RAG est invérifiable.`,
           },
           {
             kind: 'exercise',
@@ -241,7 +248,7 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Assembler le pipeline complet
 
-Tu as *toutes* les briques : le chunking (leçon 1), la similarité (module 5), TF-IDF (module 6), la construction de prompts (module 11). Il ne reste qu'à les visser ensemble.
+Tu as *toutes* les briques : le chunking (leçon 1), la similarité (module 5), TF-IDF (module 6), la construction de prompts (module 11). Il ne reste qu'à les visser ensemble pour obtenir un RAG de bout en bout.
 
 ## Le pipeline canonique
 
@@ -256,7 +263,7 @@ REQUÊTE (à chaque question) :
   4. appeler le LLM
 \`\`\`
 
-En production, les vecteurs viennent d'un modèle d'embeddings et l'index d'une base vectorielle — mais avec ta similarité TF, le *flux* est identique à 100 %.
+En production, les vecteurs viennent d'un modèle d'embeddings et l'index d'une base vectorielle — mais avec ta similarité TF, le *flux* est identique à 100 %. Le comprendre sur ce jouet, c'est le comprendre partout.
 
 ## L'assemblage du prompt : là où tout se joue
 
@@ -273,7 +280,17 @@ Si la réponse ne s'y trouve pas, dis-le explicitement.
 Question : <question>
 \`\`\`
 
-La consigne « dis-le si la réponse n'y est pas » est ta première défense contre les hallucinations — et le taux de réponses correctement *refusées* est une métrique d'évaluation à part entière (module 13).`,
+La consigne « dis-le si la réponse n'y est pas » est ta première défense contre les hallucinations — et le taux de réponses correctement *refusées* est une métrique d'évaluation à part entière.
+
+## Le réflexe de debug
+
+Ton RAG répond mal ? Le premier réflexe n'est pas de changer de LLM, mais d'**inspecter ce que le retrieval a réellement renvoyé**. Si les bons passages n'y sont pas, aucun modèle ne peut bien répondre : « garbage in, garbage out ». Dans la majorité des RAG défaillants, le problème est en amont.
+
+## Pièges classiques
+
+- **Injecter le top-k même quand rien n'est pertinent.** Sans seuil de pertinence, tu forces \`k\` chunks hors sujet dans le prompt, et le modèle brode dessus. Une liste vide est parfois la bonne réponse — elle déclenche le « je n'ai pas trouvé ».
+- **Oublier de numéroter les passages.** Sans numéros, le modèle ne peut pas citer, et sa réponse devient invérifiable.
+- **Accuser la génération avant le retrieval.** Toujours regarder le top-k d'abord : c'est là que se cachent 80 % des problèmes.`,
           },
           {
             kind: 'exercise',
@@ -502,26 +519,36 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Le contrat du RAG : ne rien affirmer sans source
 
-Ton pipeline injecte des passages numérotés et exige des citations \`[n]\`. Mais rien ne garantit que le modèle respecte le contrat : il peut citer un passage qui ne dit pas ce qu'il affirme, ou inventer un numéro. La **vérification de fidélité** (*faithfulness*) est la couche de contrôle qui ferme la boucle — et l'un des sujets les plus actifs de l'ingénierie RAG.
+Ton pipeline injecte des passages numérotés et exige des citations \`[n]\`. Mais rien ne garantit que le modèle respecte le contrat : il peut citer un passage qui ne dit pas ce qu'il affirme, ou inventer un numéro. La **vérification de fidélité** (*faithfulness*) est la couche de contrôle qui ferme la boucle — et l'un des sujets les plus actifs de l'ingénierie RAG, car c'est elle qui maintient la confiance dans un système en production.
 
 ## Vérifier mécaniquement ce qui peut l'être
 
-Avant tout LLM-juge, une batterie de contrôles *déterministes* attrape déjà beaucoup :
+Avant tout LLM-juge (coûteux), une batterie de contrôles *déterministes* (gratuits, fiables) attrape déjà beaucoup :
 
-1. **Extraction des citations** : \`re.findall(r"\\[(\\d+)\\]", reponse)\` — le module 3 au travail,
+1. **Extraction des citations** : \`re.findall(r"\\[(\\d+)\\]", reponse)\` — le module 3 au travail ;
 2. **Validité** : chaque numéro cité correspond-il à un passage réellement fourni ?
 3. **Couverture** : chaque phrase affirmative contient-elle au moins une citation ?
-4. **Ancrage lexical** : les mots significatifs d'une phrase se retrouvent-ils dans le passage qu'elle cite ? Un chevauchement quasi nul = alerte hallucination.
+4. **Ancrage lexical** : les mots significatifs d'une phrase se retrouvent-ils dans le passage qu'elle cite ?
 
 ## Le score d'ancrage
 
-Version simple et étonnamment efficace : la fraction des mots significatifs (> 3 lettres) de la phrase présents dans le passage cité :
+Version simple et étonnamment efficace : la fraction des mots significatifs (plus de 3 lettres) d'une phrase présents dans le passage qu'elle cite.
 
 \`\`\`
 ancrage = |mots(phrase) ∩ mots(passage)| / |mots(phrase)|
 \`\`\`
 
-Ce n'est pas parfait (paraphrases, synonymes — les limites du lexical, module 6 !), mais en production on combine : contrôles mécaniques d'abord (gratuits, fiables), LLM-juge ensuite (coûteux, nuancé) sur ce qui passe le premier filtre.`,
+Un ancrage proche de zéro est un signal d'alerte : la phrase n'a presque rien en commun avec sa source citée. Ce n'est pas parfait (paraphrases, synonymes — les limites du lexical, module 6) ; en production, on combine donc : contrôles mécaniques d'abord, LLM-juge ensuite sur ce qui passe le premier filtre.
+
+## L'architecture en entonnoir
+
+Ce n'est pas un hasard si l'on met le déterministe *avant* le LLM-juge : le premier attrape les violations flagrantes (numéro inventé, zéro citation, ancrage nul) pour une fraction du coût ; le second, nuancé mais cher, ne traite que les cas subtils.
+
+## Pièges classiques
+
+- **Citation valide mais infidèle.** Le piège le plus insidieux : une réponse qui *a l'air* parfaitement sourcée, mais dont le passage cité ne contient pas l'affirmation. La validité des numéros ne suffit pas — il faut confronter les *contenus*.
+- **Citer un numéro hors limites.** Un \`[7]\` avec 3 passages fournis doit être détecté comme invalide, et ne jamais provoquer d'accès hors tableau dans ton code de vérification.
+- **Faire confiance au seul ancrage lexical.** Une paraphrase fidèle peut avoir un ancrage faible ; un plagiat hors sujet, un ancrage trompeur. C'est un filtre, pas un juge final.`,
           },
           {
             kind: 'exercise',

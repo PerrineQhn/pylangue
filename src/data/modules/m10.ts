@@ -16,23 +16,33 @@ export const m10: Module = {
             kind: 'text',
             md: `# Plusieurs regards en parallèle
 
-Ton attention du module 9 calcule *une* pondération par paire de tokens. Mais une phrase mérite plusieurs lectures simultanées : qui fait quoi (syntaxe), qui désigne qui (coréférence), quel ton… L'idée du **multi-head** : découper la dimension en \`h\` « têtes », faire tourner une attention *indépendante* dans chaque sous-espace, puis concaténer.
+Ton attention du module 9 calcule *une* pondération par paire de tokens. Mais une phrase mérite plusieurs lectures simultanées : qui fait quoi (syntaxe), qui désigne qui (coréférence), quel registre, quelle position… L'idée du **multi-head** : découper la dimension en \`h\` « têtes », faire tourner une attention *indépendante* dans chaque sous-espace, puis concaténer les résultats.
+
+## L'intuition
+
+Une seule attention devrait tout capturer d'un coup et finirait par *moyenner* des relations incompatibles. Avec plusieurs têtes, chacune peut se spécialiser : les visualisations d'interprétabilité montrent des têtes qui suivent le mot précédent, d'autres les accords grammaticaux, d'autres les entités nommées. C'est de la division du travail.
 
 ## Le mécanisme
 
-Pour des matrices \`Q, K, V\` de shape \`(n, d)\` et \`h\` têtes (avec \`d\` divisible par \`h\`) :
+Pour des matrices \`Q, K, V\` de forme \`(n, d)\` et \`h\` têtes (avec \`d\` divisible par \`h\`) :
 
 \`\`\`
-1. Découpe Q, K, V en h tranches de largeur d/h (sur les colonnes)
+1. Découper Q, K, V en h tranches de largeur d/h (sur les colonnes)
 2. Pour chaque tête i : sortie_i = attention(Q_i, K_i, V_i)   # ton module 9 !
-3. Concatène les h sorties -> shape (n, d) à nouveau
+3. Concaténer les h sorties -> shape (n, d) à nouveau
 \`\`\`
 
-(Dans un vrai transformer s'ajoute une projection linéaire finale apprise — conceptuellement secondaire ici.)
+Dans un vrai transformer s'ajoute une projection linéaire finale apprise — conceptuellement secondaire ici. L'essentiel : chaque tête voit un *sous-espace* de la représentation et y calcule sa propre attention.
 
 ## Pourquoi l'ordre des tokens n'existe pas encore
 
-Surprise : l'attention est **insensible à l'ordre** — permuter les tokens permute juste les sorties. Or « le chat mord le chien » ≠ « le chien mord le chat ». Les transformers injectent donc l'information de position dans les embeddings : *positional encodings* appris (GPT-2), ou rotations RoPE appliquées à Q et K (Llama, la plupart des modèles récents). Retiens le principe : **la position est une information ajoutée, pas une propriété de l'architecture**.`,
+Surprise : l'attention est **insensible à l'ordre**. Permuter les tokens ne fait que permuter les sorties — « le chat mord le chien » et « le chien mord le chat » seraient traités pareil ! Les transformers injectent donc l'information de position dans les embeddings : encodages positionnels appris (GPT-2), ou rotations RoPE appliquées à Q et K (Llama, Qwen, la norme actuelle). Retiens le principe : **la position est une information ajoutée, pas une propriété de l'architecture**.
+
+## Pièges classiques
+
+- **\`d\` non divisible par \`h\`.** Le découpage en têtes exige \`d % h == 0\`. Sinon, les tranches n'ont pas toutes la même largeur et le recollage échoue.
+- **Utiliser \`d\` au lieu de \`d/h\` dans le \`√\`.** Chaque tête travaille en dimension \`d/h\` : le facteur d'échelle du softmax doit utiliser la dimension de la *tête*, pas la dimension totale.
+- **Croire que le multi-head coûte plus cher.** À dimension totale égale, \`h\` têtes de dimension \`d/h\` coûtent autant qu'une seule attention de dimension \`d\` — on ne paie que la richesse, pas le calcul.`,
           },
           {
             kind: 'exercise',
@@ -268,34 +278,40 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Les trois ingrédients restants
 
-Un « bloc transformer » (répété 32 fois dans Llama-8B, ~100 fois dans les plus gros modèles) ajoute trois mécanismes autour de l'attention :
+Un « bloc transformer » (répété 32 fois dans Llama-8B, une centaine de fois dans les plus gros modèles) entoure l'attention de trois mécanismes. Une fois cette leçon comprise, tu peux lire nanoGPT ligne à ligne.
 
 ## 1. Les connexions résiduelles
 
-Au lieu de \`x = f(x)\`, on écrit \`x = x + f(x)\` : chaque couche *ajoute une correction* au lieu de remplacer. C'est ce qui permet d'empiler des dizaines de couches sans que le gradient ne s'évanouisse — l'information a toujours un « raccourci » direct.
+Au lieu de \`x = f(x)\`, on écrit \`x = x + f(x)\` : chaque couche *ajoute une correction* au lieu de tout remplacer. C'est ce qui permet d'empiler des dizaines de couches sans que le gradient ne s'évanouisse — l'information garde toujours un « raccourci » direct vers l'entrée. Cette idée (ResNet, 2015) est l'un des déblocages qui ont rendu possibles les réseaux à 100+ couches.
 
 ## 2. La layer normalization
 
-Recentre et rééchelonne chaque vecteur de token (moyenne 0, variance 1) pour stabiliser l'entraînement :
+Elle recentre et rééchelonne chaque vecteur de token (moyenne 0, variance 1) pour stabiliser l'entraînement :
 
 \`\`\`
-layer_norm(x) = (x - moyenne(x)) / sqrt(variance(x) + eps)
+layer_norm(x) = (x - moyenne(x)) / √(variance(x) + eps)
 \`\`\`
 
-(par ligne — chaque token est normalisé indépendamment ; les modèles récents utilisent la variante RMSNorm, encore plus simple.)
+C'est fait *par token*, chacun normalisé indépendamment. Les modèles récents utilisent la variante RMSNorm, encore plus simple (pas de centrage).
 
 ## 3. Le MLP (feed-forward)
 
-Après l'attention (qui *mélange* les tokens entre eux), un petit réseau à deux couches traite chaque token *individuellement* : expansion ×4, non-linéarité, retour à la dimension d'origine. C'est là que résident ~2/3 des paramètres d'un LLM — on l'interprète souvent comme la « mémoire des connaissances » du modèle.
+Après l'attention — qui *mélange* les tokens entre eux — un petit réseau à deux couches traite chaque token *individuellement* : expansion ×4, non-linéarité, retour à la dimension d'origine. C'est là que résident environ **deux tiers des paramètres** d'un LLM, et l'interprétabilité y localise beaucoup de « connaissances factuelles ».
 
 ## Le bloc assemblé (version pré-norm, la moderne)
 
 \`\`\`
-x = x + attention(layer_norm(x))     # communication entre tokens
-x = x + mlp(layer_norm(x))           # calcul par token
+x = x + attention(layer_norm(x))     # communication ENTRE les tokens
+x = x + mlp(layer_norm(x))           # calcul PAR token
 \`\`\`
 
-Deux lignes. Empile-les N fois entre un embedding d'entrée et un softmax de sortie : tu as un GPT.`,
+Deux lignes. Empile-les N fois entre un embedding d'entrée et un softmax de sortie : tu as un GPT. Retiens la division du travail — *l'attention fait circuler l'information, le MLP la transforme*.
+
+## Pièges classiques
+
+- **Normaliser au mauvais endroit.** En pré-norm (le standard actuel), on normalise *avant* chaque sous-couche, pas après. L'ordre change la stabilité de l'entraînement.
+- **Oublier le résidu.** Écrire \`x = attention(norm(x))\` au lieu de \`x = x + attention(norm(x))\` supprime le raccourci : au-delà de quelques couches, le réseau devient inentraînable.
+- **La division par zéro dans la norme.** Une ligne constante a une variance nulle : le \`+ eps\` sous la racine évite le \`NaN\`. Ne l'oublie jamais.`,
           },
           {
             kind: 'exercise',
@@ -568,15 +584,15 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Du modèle au texte : l'échantillonnage
 
-Un transformer produit, pour chaque position, un vecteur de **logits** — un score par token du vocabulaire. Générer du texte, c'est choisir un token à partir de ces scores, l'ajouter à la séquence, et recommencer. La *manière* de choisir s'appelle la **stratégie d'échantillonnage**, et c'est elle que règlent les paramètres d'API que tu connais.
+Un transformer produit, pour chaque position, un vecteur de **logits** — un score par token du vocabulaire. Générer du texte, c'est choisir un token à partir de ces scores, l'ajouter à la séquence, et recommencer. La *manière* de choisir s'appelle la **stratégie d'échantillonnage** — et c'est elle que règlent les paramètres que tu connais des API (\`temperature\`, \`top_p\`).
 
 ## Les trois stratégies fondamentales
 
-**Greedy** — toujours le token le plus probable (\`argmax\`). Déterministe, mais répétitif : les boucles infinies « the the the » viennent de là.
+**Greedy** — toujours le token le plus probable (\`argmax\`). Déterministe, mais répétitif : les fameuses boucles « the the the » viennent de là.
 
-**Échantillonnage avec température** — softmax(logits / T), puis tirage selon les probabilités. T faible → concentré sur les tokens sûrs ; T élevé → créatif mais risqué. Tu as implémenté ce softmax au module 9 !
+**Échantillonnage avec température** — \`softmax(logits / T)\`, puis tirage selon les probabilités. \`T\` faible → concentré sur les tokens sûrs ; \`T\` élevé → créatif mais risqué. Tu as implémenté ce softmax au module 9 !
 
-**Top-k** — ne garder que les k tokens les plus probables, renormaliser, tirer parmi eux. Coupe la « longue traîne » de tokens absurdes qu'une température élevée pourrait atteindre. (Sa variante top-p, ou *nucleus sampling*, garde les tokens couvrant p % de probabilité cumulée — même esprit.)
+**Top-k** — ne garder que les \`k\` tokens les plus probables, renormaliser, tirer parmi eux. Coupe la « longue traîne » de tokens absurdes qu'une température élevée pourrait atteindre. Sa variante **top-p** (*nucleus sampling*) garde les tokens couvrant \`p\` % de probabilité cumulée — même esprit, seuil adaptatif.
 
 ## Le tirage pondéré en NumPy
 
@@ -585,7 +601,15 @@ rng = np.random.RandomState(graine)
 choix = rng.choice(len(probas), p=probas)   # tire un indice selon probas
 \`\`\`
 
-> Ces stratégies expliquent des comportements que tu observes tous les jours : pourquoi température 0 donne des réponses reproductibles, pourquoi une température très haute part en vrille, et pourquoi les API combinent temperature ET top_p.`,
+## Pourquoi le greedy boucle
+
+Toujours prendre le token localement le plus probable peut créer un cycle stable : une phrase répétée redevient le contexte le plus probable pour… elle-même. Un peu d'aléa (température, top-k/top-p) casse ces cycles — c'est pourquoi presque aucune API ne décode en pur greedy par défaut.
+
+## Pièges classiques
+
+- **Diviser par la température après le softmax.** La température s'applique aux *logits*, avant le softmax. Après, elle n'a plus aucun sens.
+- **Température élevée sans top-k/top-p.** À \`T\` grand, même un token à 0,01 % finit par sortir sur des milliers de tirages — une hallucination flagrante suffit à ruiner une réponse. Les seuils posent un plancher de qualité.
+- **\`temperature=0\` avec un vrai tirage aléatoire.** À température nulle, la division explose ; en pratique \`T=0\` signifie « greedy » (argmax), traité comme un cas particulier.`,
           },
           {
             kind: 'exercise',

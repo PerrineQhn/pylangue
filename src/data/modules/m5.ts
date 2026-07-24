@@ -14,9 +14,11 @@ export const m5: Module = {
         sections: [
           {
             kind: 'text',
-            md: `# NumPy : pourquoi c'est incontournable
+            md: `# NumPy : penser en tableaux
 
-PyTorch, TensorFlow, JAX… toutes les bibliothèques de deep learning sont des variations autour du même objet : le **tableau multidimensionnel** (array/tenseur). NumPy est l'original — apprendre à *penser en arrays* est le vrai objectif de ce module.
+PyTorch, TensorFlow, JAX… toutes les bibliothèques de deep learning sont des variations autour d'un même objet : le **tableau multidimensionnel** (array, ou *tenseur*). NumPy est l'original, et apprendre à *penser en arrays* est le vrai objectif de ce module — bien plus que de mémoriser des fonctions.
+
+Pourquoi ça compte pour toi ? Parce qu'en NLP, un mot devient un **vecteur** (un embedding), une phrase une **matrice** (une ligne par token), un batch un **tenseur 3D**. Toute la suite du parcours — similarité, attention, transformers — n'est que de l'algèbre sur ces objets.
 
 ## Créer et inspecter
 
@@ -28,24 +30,36 @@ M = np.array([[1, 2], [3, 4]])       # matrice, shape (2, 2)
 v.shape, M.shape, M.dtype
 \`\`\`
 
-Le réflexe n°1 en debug de code ML : **imprimer les shapes**. La moitié des bugs de deep learning sont des erreurs de shape.
+Le réflexe numéro un du praticien : **imprimer les shapes**. La moitié des bugs de deep learning sont des erreurs de forme (« j'attendais (32, 128), j'ai (128, 32) »). Avant de chercher un bug de logique, vérifie tes shapes.
 
 ## La vectorisation : jamais de boucle
+
+L'idée centrale : appliquer une opération à *tout* le tableau d'un coup, sans boucle Python.
 
 \`\`\`
 v * 2          # multiplie chaque élément
 v + w          # addition élément par élément
 v * w          # produit élément par élément (PAS le produit scalaire !)
-v @ w          # produit scalaire (dot product)
+v @ w          # produit scalaire (dot product) : un seul nombre
 np.sqrt(v)     # fonction appliquée à chaque élément
 v.sum(), v.mean(), v.max()
 \`\`\`
 
-En NLP, un mot devient un **vecteur** (embedding), une phrase une **matrice** (une ligne par token), un batch un **tenseur 3D**. Les opérations vectorisées sont des centaines de fois plus rapides que des boucles Python — et surtout, elles correspondent aux maths des articles de recherche.
+Les opérations vectorisées sont des centaines de fois plus rapides que des boucles Python — mais surtout, elles *correspondent aux formules mathématiques* des articles de recherche. Écrire \`softmax(Q @ K.T / sqrt(d))\` en NumPy, c'est recopier presque à l'identique l'équation du papier.
 
 ## Le produit scalaire, star du NLP
 
-\`v @ w = v₁w₁ + v₂w₂ + …\` mesure à quel point deux vecteurs « pointent dans la même direction ». C'est le cœur de la similarité d'embeddings **et** des scores d'attention des transformers (palier 3). Retiens : *produit scalaire = similarité brute*.`,
+\`v @ w = v₁w₁ + v₂w₂ + …\` mesure à quel point deux vecteurs « pointent dans la même direction ». C'est le cœur de la **similarité d'embeddings** ET des **scores d'attention** des transformers. Une seule idée à retenir pour tout le reste du cours : *produit scalaire = similarité brute*.
+
+## La règle des shapes du produit matriciel
+
+\`(n, k) @ (k, m) → (n, m)\` : les dimensions internes (\`k\`) doivent coïncider et disparaissent, les dimensions externes restent. C'est LA règle qui régit toutes les couches d'un réseau — apprends-la par cœur, tu la vérifieras mille fois.
+
+## Pièges classiques
+
+- **\`*\` n'est pas \`@\`.** \`v * w\` multiplie terme à terme (résultat : un vecteur) ; \`v @ w\` fait le produit scalaire (résultat : un nombre). La confusion la plus fréquente du débutant NumPy.
+- **Les shapes incompatibles.** \`(32, 128) @ (64, 10)\` lève une erreur : \`128 ≠ 64\`. Lis toujours le message d'erreur de shape, il te dit exactement quelles dimensions ne collent pas.
+- **\`(3,)\` n'est pas \`(3, 1)\`.** Un vecteur « plat » et une matrice colonne se comportent différemment en broadcasting (module 3 du palier) ; en cas de doute, imprime \`.shape\`.`,
           },
           {
             kind: 'code',
@@ -256,30 +270,42 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# La similarité cosinus : le moteur du RAG
 
-Quand un système RAG (Retrieval-Augmented Generation) cherche « les passages les plus pertinents » pour une question, il calcule presque toujours une **similarité cosinus** entre l'embedding de la question et ceux des documents. Toute base vectorielle (Pinecone, Chroma, pgvector, FAISS…) fait ça à grande échelle.
+Quand un système RAG (Retrieval-Augmented Generation) cherche « les passages les plus pertinents » pour une question, il calcule presque toujours une **similarité cosinus** entre l'embedding de la question et ceux des documents. Toute base vectorielle (Pinecone, Chroma, pgvector, FAISS…) repose là-dessus. Comprendre cette formule d'une ligne, c'est comprendre le cœur de la recherche sémantique moderne.
+
+## L'intuition : comparer des directions
+
+Imagine chaque embedding comme une flèche partant de l'origine. Deux textes de sens proche pointent dans des directions voisines, même si leurs flèches n'ont pas la même longueur. La similarité cosinus mesure précisément l'**angle** entre deux flèches, en ignorant leur longueur.
 
 ## La formule
 
 \`\`\`
-cos(u, v) = (u @ v) / (||u|| * ||v||)
+cos(u, v) = (u @ v) / (‖u‖ · ‖v‖)
 \`\`\`
 
-- Vaut **1** si les vecteurs pointent exactement dans la même direction
-- **0** s'ils sont orthogonaux (sans rapport)
-- **-1** s'ils sont opposés
+C'est le produit scalaire (leçon 1) divisé par le produit des deux normes. Le résultat vaut :
+
+- **1** si les vecteurs pointent exactement dans la même direction,
+- **0** s'ils sont orthogonaux (sans rapport),
+- **-1** s'ils sont opposés.
 
 Diviser par les normes rend la mesure **indépendante de la longueur** des vecteurs : seule la *direction* compte — et dans un espace d'embeddings, la direction encode le *sens*.
 
-## Recherche sémantique en 3 lignes
+## Recherche sémantique en deux lignes
 
-Avec une matrice \`E\` d'embeddings normalisés (norme 1), la similarité cosinus se réduit au produit scalaire :
+Avec une matrice \`E\` d'embeddings **normalisés** (norme 1), la similarité cosinus se réduit au simple produit scalaire :
 
 \`\`\`
 scores = E @ q          # q : embedding normalisé de la requête
 meilleur = scores.argmax()
 \`\`\`
 
-C'est *exactement* ce que fait une base vectorielle, plus des structures d'index pour aller vite sur des millions de vecteurs. Le concept tient en deux lignes de NumPy.`,
+C'est *exactement* ce que fait une base vectorielle, plus des structures d'index pour aller vite sur des millions de vecteurs. Le concept, lui, tient en deux lignes de NumPy — et beaucoup de modèles d'embeddings sortent d'ailleurs des vecteurs *déjà normalisés*, précisément pour transformer la similarité en un dot product.
+
+## Pièges classiques
+
+- **La division par zéro.** Un vecteur nul a une norme de 0 : la similarité cosinus n'est pas définie. En pratique, filtre les documents vides en amont ou ajoute un epsilon.
+- **Confondre similarité et distance.** Cosinus proche de 1 = *très similaire* ; la distance euclidienne, elle, est proche de 0 pour des vecteurs similaires. Les deux vont dans des sens opposés — vérifie toujours si tu tries par ordre croissant ou décroissant.
+- **Oublier de normaliser la requête aussi.** Si tu pré-normalises \`E\` mais pas \`q\`, ton \`E @ q\` n'est plus un cosinus. Normalise les deux côtés, ou aucun.`,
           },
           {
             kind: 'exercise',
@@ -461,29 +487,44 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Toutes les similarités d'un coup
 
-Comparer une requête à n documents, tu sais faire. Mais comparer *chaque document à chaque autre* — pour dédupliquer un corpus, regrouper des questions similaires, construire un graphe de voisinage ? Il te faut la **matrice de similarité** complète, et c'est là que NumPy brille.
+Comparer une requête à \`n\` documents, tu sais faire. Mais comparer *chaque* document à *chaque* autre — pour dédupliquer un corpus, regrouper des questions similaires, construire un graphe de voisinage ? Il te faut la **matrice de similarité** complète, et c'est là que NumPy révèle toute sa puissance.
 
-## L'astuce : normaliser d'abord
+## L'astuce : normaliser, puis un seul produit matriciel
 
-Pour des embeddings normalisés (norme 1, ta fonction du module 5 !), la similarité cosinus se réduit au produit scalaire. Donc *toutes* les paires d'un coup :
+Pour des embeddings normalisés (norme 1 — la fonction de la leçon précédente), la similarité cosinus se réduit au produit scalaire. Donc *toutes* les paires se calculent en une seule opération :
 
 \`\`\`
 E_norm = normaliser_l2(E)        # (n, d)
 S = E_norm @ E_norm.T            # (n, n) : S[i, j] = cos(doc_i, doc_j)
 \`\`\`
 
-Une ligne. Pour 10 000 documents, ça reste quasi instantané — c'est exactement ce que fait une base vectorielle en interne (avant d'ajouter des index approximatifs pour les millions).
+Une ligne. Pour 10 000 documents, ça reste quasi instantané — c'est exactement ce que fait une base vectorielle en interne, avant d'ajouter des index approximatifs pour passer aux millions.
+
+## Le broadcasting : diffuser une opération
+
+NumPy sait combiner des tableaux de formes différentes en « diffusant » automatiquement le plus petit. Pour diviser une matrice \`(n, d)\` par un vecteur de \`n\` normes, il faut lui donner la forme \`(n, 1)\` :
+
+\`\`\`
+normes = np.linalg.norm(E, axis=1)   # (n,)
+E_norm = E / normes[:, None]         # (n, 1) se diffuse sur les d colonnes
+\`\`\`
+
+Le \`[:, None]\` (ou \`.reshape(-1, 1)\`) transforme \`(n,)\` en \`(n, 1)\` : la division s'applique alors *ligne par ligne*. Maîtriser ce geste, c'est débloquer 90 % des manipulations de tenseurs.
 
 ## argsort : trouver les voisins
 
-\`np.argsort(v)\` renvoie les **indices** qui trieraient le vecteur. Pour les k plus proches voisins du document i :
+\`np.argsort(v)\` renvoie les **indices** qui trieraient le vecteur. Pour les k plus proches voisins du document \`i\` :
 
 \`\`\`
-ordre = np.argsort(S[i])[::-1]    # indices du plus similaire au moins
-voisins = ordre[ordre != i][:k]   # on s'exclut soi-même (S[i,i] = 1 !)
+ordre = np.argsort(S[i])[::-1]    # du plus similaire au moins
+voisins = ordre[ordre != i][:k]   # on s'exclut soi-même !
 \`\`\`
 
-Le piège classique : chaque document est son propre voisin n°1 (similarité 1 avec lui-même). Toujours exclure la diagonale.`,
+## Pièges classiques
+
+- **Chaque document est son propre voisin n°1.** \`S[i, i] = 1\` (un document est identique à lui-même). Oublie de l'exclure, et ton « plus proche voisin » est toujours… lui-même. Filtre la diagonale.
+- **\`(n,)\` divisé par \`(n,)\` ne fait pas ce que tu crois.** Sans le \`[:, None]\`, NumPy tente une division élément par élément ou lève une erreur de shape. Le broadcasting exige la forme \`(n, 1)\`.
+- **La matrice \`(n, n)\` explose en mémoire.** À 100 000 documents, \`S\` fait 10 milliards de cases. Au-delà de quelques dizaines de milliers, on passe aux index approximatifs (FAISS) — mais le principe reste celui-ci.`,
           },
           {
             kind: 'exercise',

@@ -16,7 +16,7 @@ export const m13: Module = {
             kind: 'text',
             md: `# Du chatbot à l'agent
 
-Un chatbot répond. Un **agent** *agit* : il décide d'appeler des outils (recherche, calcul, code, API), observe les résultats, et recommence jusqu'à pouvoir répondre. Claude Code, les Deep Research, les agents d'entreprise : tous reposent sur la même boucle, étonnamment simple.
+Un chatbot répond. Un **agent** *agit* : il décide d'appeler des outils (recherche, calcul, code, API), observe les résultats, et recommence jusqu'à pouvoir répondre. Claude Code, les « Deep Research », les agents d'entreprise : tous reposent sur la même boucle, étonnamment simple. La connaître à nu te rend autonome vis-à-vis des frameworks qui l'enrobent.
 
 ## La boucle canonique
 
@@ -25,21 +25,27 @@ messages = [question]
 tant que True :
     decision = llm(messages)
     si decision est une réponse finale :
-        retourne-la
+        retourner-la
     sinon (c'est un appel d'outil) :
         resultat = executer_outil(decision.outil, decision.args)
         messages += [decision, resultat]     # l'agent VOIT le résultat
 \`\`\`
 
-Le point crucial : **le LLM ne fait que décider**. C'est ton code qui exécute les outils, contrôle ce qui est permis, et renvoie les résultats dans l'historique. Le modèle produit du texte structuré ; ton programme fait le reste.
+Le point crucial : **le LLM ne fait que décider**. C'est *ton code* qui exécute les outils, contrôle ce qui est permis, et renvoie les résultats dans l'historique. Le modèle produit du texte structuré (« je veux appeler la calculatrice avec 6×7 ») ; ton programme fait le reste. C'est la frontière de sécurité fondamentale : le modèle propose, ton code dispose.
 
 ## Les garde-fous non négociables
 
-Une boucle pilotée par un modèle probabiliste *peut* ne jamais s'arrêter, appeler un outil avec des arguments invalides, ou tourner en rond. Tout agent de production a :
+Une boucle pilotée par un modèle probabiliste *peut* ne jamais s'arrêter, appeler un outil avec des arguments invalides, ou tourner en rond. Tout agent de production possède :
 
-- un **budget d'itérations** (max_tours) — jamais de \`while True\` nu,
-- une **validation des arguments** avant exécution,
-- une gestion d'erreur qui renvoie l'échec *au modèle* (souvent il se corrige au tour suivant !).`,
+- un **budget d'itérations** (\`max_tours\`) — jamais de \`while True\` nu ;
+- une **validation des arguments** avant exécution (liste blanche d'outils, vérification des types) ;
+- une gestion d'erreur qui renvoie l'échec *au modèle* — souvent, il se corrige au tour suivant.
+
+## Pièges classiques
+
+- **Exécuter une décision sans la valider.** Un modèle peut « décider » d'appeler un outil inexistant ou dangereux. Valide le nom (liste blanche) et les arguments *avant* toute exécution.
+- **La boucle infinie.** Sans budget d'itérations, un agent qui hésite peut tourner indéfiniment — et facturer à chaque tour. Le \`max_tours\` est obligatoire.
+- **Cacher les erreurs d'outils.** Renvoyer « fichier introuvable » *au modèle* lui permet de corriger le chemin et réessayer. Crasher à la place casse cette capacité d'auto-réparation.`,
           },
           {
             kind: 'exercise',
@@ -330,7 +336,7 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# La compétence la plus demandée de 2026
 
-Construire une démo LLM prend une journée. Savoir **prouver qu'elle marche** — et qu'elle marche *encore* après un changement de prompt ou de modèle — est ce qui distingue l'ingénieur du bricoleur. Les evals sont devenues le nerf de la guerre.
+Construire une démo LLM prend une journée. Savoir **prouver qu'elle marche** — et qu'elle marche *encore* après un changement de prompt ou de modèle — est ce qui distingue l'ingénieur du bricoleur. Les evals sont devenues le nerf de la guerre, au point qu'« eval engineer » est un intitulé de poste à part entière.
 
 ## Les trois étages de l'évaluation
 
@@ -343,13 +349,23 @@ inclusion   : la réponse contient-elle l'information clé ?
 
 Rapides, objectives, parfaites pour l'extraction, la classification, le calcul.
 
-**2. LLM-as-judge** — quand la qualité est subjective (ton, clarté, fidélité à une source) : on demande à un *autre* modèle de noter la réponse selon une grille précise. Puissant mais à manier avec soin : biais de position, préférence pour les réponses longues, auto-complaisance. Règle d'or : **calibrer le juge sur un échantillon annoté par des humains** avant de lui faire confiance.
+**2. LLM-as-judge** — quand la qualité est subjective (ton, clarté, fidélité à une source) : on demande à un *autre* modèle de noter la réponse selon une grille précise. Puissant, mais à manier avec précaution (biais de position, préférence pour les réponses longues, auto-complaisance). Règle d'or : **calibrer le juge** sur un échantillon annoté par des humains avant de lui faire confiance (leçon suivante).
 
 **3. Métriques métier** — taux de résolution des tickets, satisfaction, coût par requête. La seule vérité finale.
 
 ## Le jeu de test (golden set)
 
-Un fichier de cas \`{entrée, sortie attendue}\`, construit à la main, versionné avec le code. À chaque modification du prompt ou du modèle, on rejoue tout et on compare les scores : c'est le *test de régression* du monde LLM. 50 bons exemples battent 5000 exemples médiocres.`,
+Un fichier de cas \`{entrée, sortie attendue}\`, construit à la main et versionné avec le code. À chaque modification du prompt ou du modèle, on rejoue *tout* et on compare les scores : c'est le **test de régression** du monde LLM. 50 bons exemples battent 5 000 exemples médiocres.
+
+## Lire au-delà de la moyenne
+
+Un score global qui monte peut cacher des *régressions* graves : le nouveau prompt gagne sur dix cas mais casse trois cas critiques. D'où l'importance de lister les cas passés de réussite à échec (et l'inverse), pas seulement le delta moyen.
+
+## Pièges classiques
+
+- **Un exact match trop strict.** « Paris » et « paris. » sont la même réponse : sans normalisation, tu comptes des faux échecs de pure forme qui noient les vrais problèmes.
+- **Supprimer les cas gênants du jeu de test.** L'équivalent LLM de supprimer les tests qui échouent : on se ment à soi-même. On lit les échecs, on ne les efface pas.
+- **Ne regarder que la moyenne.** Toujours inspecter les régressions cas par cas avant de déployer — une amélioration moyenne peut masquer une catastrophe locale.`,
           },
           {
             kind: 'exercise',
@@ -634,9 +650,9 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Peut-on faire confiance au juge ?
 
-Le module précédent l'a annoncé : avant d'automatiser l'évaluation avec un LLM-juge, il faut **mesurer son accord avec des humains**. Un juge, c'est un capteur — et un capteur, ça se calibre. Cette leçon t'apprend à le faire proprement, avec les deux métriques standard.
+La leçon précédente l'a annoncé : avant d'automatiser l'évaluation avec un LLM-juge, il faut **mesurer son accord avec des humains**. Un juge, c'est un capteur — et un capteur, ça se calibre. Cette leçon t'apprend à le faire proprement, avec les deux métriques standard.
 
-## Le taux d'accord brut
+## Le taux d'accord brut, et son mensonge
 
 Sur un échantillon annoté par des humains, la fraction des cas où le juge donne le même verdict :
 
@@ -644,24 +660,33 @@ Sur un échantillon annoté par des humains, la fraction des cas où le juge don
 accord = verdicts identiques / total
 \`\`\`
 
-Simple, mais trompeur : si 90 % des réponses sont « bonnes », un juge paresseux qui dit *toujours* « bonne » atteint 90 % d'accord… sans rien juger du tout.
+Simple, mais trompeur : si 90 % des réponses sont « bonnes », un juge paresseux qui répond *toujours* « bonne » atteint 90 % d'accord… sans rien juger du tout. L'accord brut ne fait pas la différence entre un vrai juge et une girouette.
 
 ## Kappa de Cohen : l'accord corrigé du hasard
 
-Le kappa compare l'accord observé à l'accord qu'on obtiendrait *par hasard* vu les distributions de chacun :
+Le kappa compare l'accord *observé* à celui qu'on obtiendrait *par pur hasard*, compte tenu des tendances de chacun :
 
 \`\`\`
-kappa = (accord_observe - accord_hasard) / (1 - accord_hasard)
+kappa = (accord_observé - accord_hasard) / (1 - accord_hasard)
 
 accord_hasard = P(les deux disent oui) + P(les deux disent non)
               = p_juge_oui × p_humain_oui + p_juge_non × p_humain_non
 \`\`\`
 
-- kappa ≈ 1 : accord réel excellent
-- kappa ≈ 0 : le juge ne fait pas mieux que le hasard (même si l'accord brut est haut !)
-- Repères usuels : < 0.4 faible · 0.4-0.6 modéré · 0.6-0.8 substantiel · > 0.8 excellent
+- kappa ≈ 1 : accord réel excellent,
+- kappa ≈ 0 : le juge ne fait pas mieux que le hasard (même si l'accord brut est haut !).
 
-Le juge paresseux du paragraphe précédent ? Accord brut 90 %, **kappa 0** — démasqué. C'est exactement pour ça que les papiers d'évaluation rapportent le kappa, pas l'accord brut.`,
+Repères usuels : < 0,4 faible · 0,4-0,6 modéré · 0,6-0,8 substantiel · > 0,8 excellent. Le juge paresseux du paragraphe précédent ? Accord brut 90 %, **kappa 0** — démasqué. C'est exactement pour ça que les articles d'évaluation rapportent le kappa, pas l'accord brut.
+
+## Une calibration qui périme
+
+Un juge calibré une fois pour toutes n'existe pas. Nouveau modèle de juge, nouveau prompt, nouveau domaine → nouvel échantillon annoté. La calibration transforme le juge en instrument de mesure *documenté*, à revérifier régulièrement.
+
+## Pièges classiques
+
+- **Se fier à l'accord brut sur des classes déséquilibrées.** C'est là qu'il ment le plus. Regarde toujours le kappa, qui mesure ce que le juge ajoute *au-delà* de la distribution de base.
+- **Oublier le cas des distributions dégénérées.** Si tout le monde dit « oui » à 100 %, l'accord hasard vaut 1 et le kappa devient indéfini (division par zéro) : renvoie 0 par convention.
+- **Automatiser un juge non calibré.** C'est un générateur de fausse assurance : il produit des scores qui *paraissent* rigoureux mais ne mesurent rien de fiable.`,
           },
           {
             kind: 'exercise',

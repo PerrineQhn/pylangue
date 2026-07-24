@@ -16,7 +16,7 @@ export const m6: Module = {
             kind: 'text',
             md: `# Transformer du texte en nombres, première méthode
 
-Aucun algorithme ne travaille sur des mots : il faut des **vecteurs**. La méthode historique, toujours utilisée (recherche lexicale, baselines, features), est le **bag of words** (sac de mots) : chaque document devient un vecteur de comptages, une dimension par mot du vocabulaire.
+Aucun algorithme ne travaille directement sur des mots : il lui faut des **vecteurs**. La méthode historique — toujours utilisée pour la recherche lexicale, les baselines et le monitoring — est le **bag of words** (sac de mots) : chaque document devient un vecteur de comptages, avec une dimension par mot du vocabulaire.
 
 \`\`\`
 Vocabulaire : ["chat", "chien", "dort", "mange"]
@@ -24,18 +24,28 @@ Vocabulaire : ["chat", "chien", "dort", "mange"]
 "le chien dort"                ->  [0, 1, 1, 0]
 \`\`\`
 
-L'*ordre des mots est perdu* (d'où le nom : un « sac ») — c'est la grande limite, et la raison d'être des modèles séquentiels puis des transformers.
+## Pourquoi « sac » de mots ?
+
+Parce que l'**ordre est perdu**, comme si on jetait tous les mots pêle-mêle dans un sac. « Le chat mange la souris » et « la souris mange le chat » produisent le *même* vecteur. C'est la grande limite de la méthode — et précisément la raison d'être des modèles séquentiels, puis des transformers, qui eux tiennent compte de la position.
 
 ## Construire la représentation
 
 Deux étapes, que tu connais déjà par morceaux :
 
-1. **Vocabulaire** : l'ensemble des mots du corpus, avec un index fixe par mot (module 2 !),
-2. **Vectorisation** : pour chaque document, compter les occurrences de chaque mot du vocabulaire (module 1 !).
+1. **le vocabulaire** : l'ensemble des mots du corpus, avec un index fixe par mot (le dictionnaire du module 2 !),
+2. **la vectorisation** : pour chaque document, compter les occurrences de chaque mot du vocabulaire (le motif de comptage du module 1 !).
 
-## La matrice documents × mots
+Empile les vecteurs, et tu obtiens une **matrice documents × mots** de forme \`(n_documents, taille_vocab)\`. C'est la structure de données de la recherche d'information classique, et l'entrée des premiers classifieurs de texte. Dans scikit-learn, tout ceci s'appelle \`CountVectorizer\` — aujourd'hui, tu l'écris toi-même.
 
-Empile les vecteurs : tu obtiens une matrice \`(n_documents, taille_vocab)\`. C'est la structure de données de la recherche d'information classique — et l'entrée des premiers classifieurs de texte. Dans scikit-learn, tout ceci s'appelle \`CountVectorizer\` ; aujourd'hui tu l'écris toi-même.`,
+## Le prix à payer : la sparsité
+
+Pour un vocabulaire de 50 000 mots, le vecteur d'un tweet de 15 mots est un vecteur de dimension 50 000 rempli à 99,97 % de zéros. On parle de vecteurs **creux** (*sparse*). Ils sont énormes et peu informatifs — c'est exactement le problème que les embeddings neuronaux (denses, de dimension 300 à 4096) viennent résoudre.
+
+## Pièges classiques
+
+- **Vocabulaire local vs global.** Le vocabulaire doit être construit sur *tout* le corpus, puis appliqué à chaque document — sinon deux documents auraient des vecteurs de tailles différentes, incomparables.
+- **Les mots hors vocabulaire.** À l'inférence, un mot jamais vu à l'entraînement n'a pas de colonne : on l'ignore (ou on prévoit une dimension \`<unk>\`). Ne plante pas dessus.
+- **L'ordre des colonnes doit être fixe.** Trier le vocabulaire (alphabétiquement, par exemple) garantit des vecteurs reproductibles d'une exécution à l'autre — indispensable pour comparer ou sauvegarder un modèle.`,
           },
           {
             kind: 'exercise',
@@ -210,30 +220,40 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# Le problème des comptages bruts
 
-Dans un moteur de recherche bag of words, « le » et « de » dominent tous les scores : très fréquents, jamais informatifs. **TF-IDF** corrige ça avec une idée simple : *un mot compte s'il est fréquent dans CE document mais rare dans LES AUTRES*.
+Dans un moteur de recherche bag of words, les mots « le », « de », « et » écrasent tous les scores : très fréquents, jamais informatifs. **TF-IDF** corrige ce défaut avec une idée d'une élégance rare : *un mot compte s'il est fréquent dans CE document mais rare dans LES autres*.
+
+## L'intuition
+
+Un mot qui apparaît partout ne distingue rien — il ne t'aide pas à choisir un document plutôt qu'un autre. Un mot rare, en revanche, est un signal fort : s'il est présent, c'est probablement le bon document. TF-IDF récompense donc la *rareté globale* autant que la *présence locale*.
 
 ## La formule
 
-Pour un mot \`m\` dans un document \`d\` :
+Pour un mot \`m\` dans un document \`d\`, sur un corpus de \`N\` documents :
 
 \`\`\`
 tf(m, d)   = nombre d'occurrences de m dans d
-idf(m)     = log(N / df(m))          # N = nb docs, df = nb docs contenant m
-tfidf(m,d) = tf(m, d) * idf(m)
+idf(m)     = log(N / df(m))          # df = nombre de documents contenant m
+tfidf(m,d) = tf(m, d) × idf(m)
 \`\`\`
 
-- Un mot présent dans **tous** les documents : \`idf = log(N/N) = 0\` → poids nul. « Le » disparaît de lui-même, sans liste de stopwords !
+- Un mot présent dans **tous** les documents : \`idf = log(N/N) = log(1) = 0\` → poids nul. « Le » disparaît *de lui-même*, sans aucune liste de stopwords, et de façon adaptée au domaine (dans un corpus médical, « patient » devient un quasi-stopword).
 - Un mot rare : \`idf\` élevé → ses occurrences pèsent lourd.
 
 ## Le moteur de recherche
 
-Score d'un document pour une requête = somme des tf-idf des mots de la requête :
+Le score d'un document pour une requête = la somme des TF-IDF des mots de la requête :
 
 \`\`\`
-score(d, requete) = somme des tfidf(m, d) pour chaque mot m de la requête
+score(d, requête) = Σ tfidf(m, d) pour chaque mot m de la requête
 \`\`\`
 
-Classe les documents par score décroissant : c'est un moteur de recherche. Les vrais systèmes (Elasticsearch, et la moitié des pipelines RAG en mode « recherche hybride ») utilisent **BM25**, un raffinement direct de cette formule — le cœur conceptuel est identique.`,
+Classe les documents par score décroissant, et tu as un moteur de recherche. Les vrais systèmes (Elasticsearch, et la moitié des pipelines RAG en mode « recherche hybride ») utilisent **BM25**, un raffinement direct de cette formule — le cœur conceptuel est identique à ce que tu vas coder.
+
+## Pièges classiques
+
+- **\`df = 0\` et la division par zéro.** Un mot absent du corpus donne \`df = 0\` : protège le \`log(N / df)\` en renvoyant \`0\` dans ce cas.
+- **Fréquence de document, pas fréquence totale.** \`df(m)\` compte le nombre de *documents* contenant \`m\`, pas le nombre total d'occurrences. Un mot répété 50 fois dans un seul document a \`df = 1\`.
+- **La limite lexicale.** TF-IDF ne voit aucun lien entre « voiture » et « automobile » : sans mot exact commun, le score est nul. C'est précisément ce que les embeddings sémantiques résolvent — d'où la recherche *hybride* (lexicale + sémantique) des meilleurs RAG.`,
           },
           {
             kind: 'exercise',
@@ -440,32 +460,41 @@ print("TESTS_PASS")`,
             kind: 'text',
             md: `# « Mon moteur est-il bon ? » — prouve-le
 
-Tu as deux moteurs (comptage brut et TF-IDF). Lequel est meilleur ? *L'impression* ne suffit pas : il faut un **jeu de test** et une **métrique**. C'est le même réflexe que le module 13 côté LLM — et en recherche d'information, la métrique reine s'appelle **précision@k**.
+Tu as maintenant deux moteurs de recherche : comptage brut et TF-IDF. Lequel est meilleur ? *L'impression* ne suffit pas — en entreprise, les décisions se prennent sur des chiffres. Il te faut un **jeu de test** et une **métrique**. C'est le même réflexe que pour l'évaluation des LLM (module 13), et en recherche d'information, la métrique reine s'appelle **précision@k**.
 
 ## Le jeu de test de retrieval
 
-Pour chaque requête, on annote à la main les documents *réellement pertinents* :
+Pour chaque requête, on annote *à la main* les documents réellement pertinents :
 
 \`\`\`
 jeu = [
-    {"requete": "chat qui dort", "pertinents": {0, 4}},
-    {"requete": "recette gateau", "pertinents": {2}},
+    {"requête": "chat qui dort", "pertinents": {0, 4}},
+    {"requête": "recette gâteau", "pertinents": {2}},
 ]
 \`\`\`
 
-## Précision@k
+Ces annotations sont la **vérité terrain** : elles doivent être indépendantes du système évalué, sinon on note le moteur avec sa propre copie.
 
-Le moteur renvoie ses k premiers résultats. Quelle fraction est pertinente ?
+## Précision@k et rappel@k
+
+Le moteur renvoie ses \`k\` premiers résultats. Deux questions complémentaires :
 
 \`\`\`
-precision@k = |top_k ∩ pertinents| / k
+précision@k = |top_k ∩ pertinents| / k       # « ce que je montre est-il bon ? »
+rappel@k    = |top_k ∩ pertinents| / |pertinents|  # « ai-je tout retrouvé ? »
 \`\`\`
 
-Exemple : top-3 = [4, 1, 0], pertinents = {0, 4} → 2/3 ≈ 0.67. On moyenne ensuite sur toutes les requêtes du jeu. (Sa jumelle, le **rappel@k**, divise par le nombre de pertinents — « en ai-je retrouvé la totalité ? ». Les deux se lisent ensemble.)
+Exemple : top-3 = \`[4, 1, 0]\`, pertinents = \`{0, 4}\` → précision = 2/3, rappel = 2/2 = 1. On moyenne ensuite sur toutes les requêtes du jeu, et on compare les variantes **sur le même jeu de test**.
 
-## Pourquoi c'est LE réflexe à avoir
+## Quelle métrique privilégier ?
 
-Chunking différent, embeddings différents, TF-IDF vs sémantique, hybride… chaque variante de ton RAG se compare **sur les mêmes requêtes annotées**. Sans ça, on « améliore » à l'aveugle. Avec ça, chaque changement a un chiffre.`,
+Un RAG a surtout besoin de **rappel** : l'information *doit* figurer dans le contexte injecté, quitte à y ajouter un peu de bruit — le LLM se chargera d'ignorer le superflu. Un moteur affiché à l'utilisateur privilégie la **précision** : personne ne lit la page 3 des résultats.
+
+## Pièges classiques
+
+- **Comparer sur des jeux différents.** Deux moteurs ne se comparent que sur les *mêmes* requêtes annotées. Changer de jeu entre deux mesures rend le verdict absurde.
+- **Se noter sur ses propres sorties.** Utiliser les résultats du moteur comme « pertinents » de référence est une erreur circulaire : le score sera parfait et ne voudra rien dire.
+- **Croire qu'un petit jeu est inutile.** 20 à 50 requêtes bien annotées valent mieux que 5 000 bâclées. La qualité de l'annotation prime sur la quantité.`,
           },
           {
             kind: 'exercise',
