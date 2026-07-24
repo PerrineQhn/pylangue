@@ -1,6 +1,6 @@
 # PyLangue
 
-**Apprendre Python à travers le NLP et les LLM** — un parcours interactif complet (13 modules, 39 leçons) où chaque concept Python est enseigné via un vrai problème de traitement du langage : de la première chaîne de caractères jusqu'au bloc transformer complet en NumPy, au RAG de bout en bout et à la boucle agentique.
+**Apprendre Python à travers le NLP et les LLM** — un parcours interactif complet (13 modules, 39 leçons, 117 exercices) où chaque concept Python est enseigné via un vrai problème de traitement du langage : de la première chaîne de caractères jusqu'au bloc transformer complet en NumPy, au RAG de bout en bout et à la boucle agentique.
 
 **Essayer en ligne → [perrineqhn.github.io/pylangue](https://perrineqhn.github.io/pylangue/)**
 

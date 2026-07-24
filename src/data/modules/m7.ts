@@ -108,6 +108,123 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm7l1e2',
+              title: "Le seuil de décision, un choix métier",
+              instructions: `Le seuil de 0.5 n'a rien de sacré : détecter une fraude coûte cher en faux positifs, rater un cancer coûte infiniment plus en faux négatifs. Écris \`predire_avec_seuil(probas, seuil)\` (1 si proba ≥ seuil) puis \`compter_alertes(probas, seuil)\` qui renvoie le nombre de 1.
+
+Observe dans les tests : baisser le seuil augmente les alertes — plus de rappel, moins de précision. Ce curseur, c'est TOI qui le règles, pas le modèle.`,
+              starterCode: `import numpy as np
+
+def predire_avec_seuil(probas, seuil=0.5):
+    ...
+
+def compter_alertes(probas, seuil=0.5):
+    ...
+
+p = np.array([0.2, 0.45, 0.55, 0.9, 0.35])
+print(predire_avec_seuil(p, 0.5))
+print(compter_alertes(p, 0.5), "alertes à 0.5")
+print(compter_alertes(p, 0.3), "alertes à 0.3")`,
+              solution: `import numpy as np
+
+def predire_avec_seuil(probas, seuil=0.5):
+    return (probas >= seuil).astype(int)
+
+def compter_alertes(probas, seuil=0.5):
+    return int(predire_avec_seuil(probas, seuil).sum())
+
+p = np.array([0.2, 0.45, 0.55, 0.9, 0.35])
+print(predire_avec_seuil(p, 0.5))
+print(compter_alertes(p, 0.5), "alertes à 0.5")
+print(compter_alertes(p, 0.3), "alertes à 0.3")`,
+              tests: `import numpy as np
+_p = np.array([0.2, 0.45, 0.55, 0.9, 0.35])
+assert list(predire_avec_seuil(_p, 0.5)) == [0, 0, 1, 1, 0], "Seuil standard"
+assert list(predire_avec_seuil(_p, 0.9)) == [0, 0, 0, 1, 0], "Seuil strict : seule la proba 0.9 passe (>= inclus)"
+assert compter_alertes(_p, 0.5) == 2, "2 alertes à 0.5"
+assert compter_alertes(_p, 0.3) == 4, "4 alertes à 0.3 — baisser le seuil = plus d'alertes"
+assert compter_alertes(_p, 0.99) == 0, "Seuil quasi impossible : aucune alerte"
+print("TESTS_PASS")`,
+              hints: [
+                '(probas >= seuil).astype(int) — la comparaison vectorisée.',
+                'La somme d\'un vecteur de 0/1 compte les 1.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm7l1e3',
+              title: "Défi — Matrice de confusion et métriques",
+              instructions: `LE tableau qu'on te demandera à chaque modèle de classification. Écris :
+
+1. \`matrice_confusion(y_vrai, y_pred)\` — le dict \`{"vp", "fp", "vn", "fn"}\` (vrais/faux positifs/négatifs, en int),
+2. \`precision(cm)\` — vp / (vp + fp), et \`rappel(cm)\` — vp / (vp + fn) — \`0.0\` si dénominateur nul.
+
+Précision : « quand j'alerte, ai-je raison ? ». Rappel : « est-ce que j'attrape tous les vrais cas ? ». Les confondre en réunion est un faux pas classique — plus jamais après cet exercice.`,
+              starterCode: `import numpy as np
+
+def matrice_confusion(y_vrai, y_pred):
+    ...
+
+def precision(cm):
+    ...
+
+def rappel(cm):
+    ...
+
+y_vrai = np.array([1, 1, 0, 0, 1, 0, 1, 0])
+y_pred = np.array([1, 0, 0, 1, 1, 0, 0, 0])
+cm = matrice_confusion(y_vrai, y_pred)
+print(cm)
+print("précision :", precision(cm), "| rappel :", rappel(cm))`,
+              solution: `import numpy as np
+
+def matrice_confusion(y_vrai, y_pred):
+    y_vrai = np.asarray(y_vrai).astype(int)
+    y_pred = np.asarray(y_pred).astype(int)
+    return {
+        "vp": int(((y_vrai == 1) & (y_pred == 1)).sum()),
+        "fp": int(((y_vrai == 0) & (y_pred == 1)).sum()),
+        "vn": int(((y_vrai == 0) & (y_pred == 0)).sum()),
+        "fn": int(((y_vrai == 1) & (y_pred == 0)).sum()),
+    }
+
+def precision(cm):
+    total = cm["vp"] + cm["fp"]
+    return cm["vp"] / total if total else 0.0
+
+def rappel(cm):
+    total = cm["vp"] + cm["fn"]
+    return cm["vp"] / total if total else 0.0
+
+y_vrai = np.array([1, 1, 0, 0, 1, 0, 1, 0])
+y_pred = np.array([1, 0, 0, 1, 1, 0, 0, 0])
+cm = matrice_confusion(y_vrai, y_pred)
+print(cm)
+print("précision :", precision(cm), "| rappel :", rappel(cm))`,
+              tests: `import numpy as np
+_cm = matrice_confusion(np.array([1, 1, 0, 0, 1, 0, 1, 0]), np.array([1, 0, 0, 1, 1, 0, 0, 0]))
+assert _cm == {"vp": 2, "fp": 1, "vn": 3, "fn": 2}, "Compte chaque case : vp=2, fp=1, vn=3, fn=2"
+assert abs(precision(_cm) - 2/3) < 1e-9, "précision = vp/(vp+fp) = 2/3"
+assert abs(rappel(_cm) - 2/4) < 1e-9, "rappel = vp/(vp+fn) = 1/2"
+_parfait = matrice_confusion(np.array([1, 0]), np.array([1, 0]))
+assert precision(_parfait) == 1.0 and rappel(_parfait) == 1.0, "Classifieur parfait"
+_muet = matrice_confusion(np.array([1, 1]), np.array([0, 0]))
+assert precision(_muet) == 0.0, "Aucune prédiction positive : précision 0.0, pas de crash"
+print("TESTS_PASS")`,
+              hints: [
+                'Chaque case est une conjonction : (y_vrai == 1) & (y_pred == 1), sommée.',
+                'Le & (et non "and") pour combiner des masques booléens NumPy.',
+                'Les gardes "if total else 0.0" évitent les divisions par zéro.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -263,6 +380,114 @@ print("TESTS_PASS")`,
                 'entrainer : w = np.zeros(X.shape[1]), puis une boucle qui réaffecte w, b = une_etape(...).',
               ],
               needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm7l2e2',
+              title: "Suivre la courbe de perte",
+              instructions: `Le premier réflexe de monitoring d'un entraînement : enregistrer la perte à chaque étape. Avec \`une_etape\` et \`perte\` fournis, écris \`historique_pertes(X, y, etapes, lr)\` qui :
+
+1. initialise \`w\` à zéros et \`b\` à 0,
+2. enregistre la perte AVANT la première étape, puis après chaque étape,
+3. renvoie la liste des pertes (longueur \`etapes + 1\`).
+
+C'est cette liste que trace TensorBoard/W&B — et qu'on scrute pour diagnostiquer un entraînement.`,
+              starterCode: `import numpy as np
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+def perte(p, y):
+    p = np.clip(p, 1e-10, 1 - 1e-10)
+    return float(-np.mean(y * np.log(p) + (1 - y) * np.log(1 - p)))
+
+def une_etape(X, y, w, b, lr):
+    p = sigmoid(X @ w + b)
+    return w - lr * (X.T @ (p - y)) / len(y), b - lr * (p - y).mean()
+
+X = np.array([[2.0, 0.5], [1.5, 1.0], [-1.0, -0.5], [-2.0, 0.0]])
+y = np.array([1.0, 1.0, 0.0, 0.0])
+
+def historique_pertes(X, y, etapes=10, lr=0.5):
+    ...
+
+h = historique_pertes(X, y, etapes=5)
+print([round(v, 3) for v in h])`,
+              solution: `import numpy as np
+
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+def perte(p, y):
+    p = np.clip(p, 1e-10, 1 - 1e-10)
+    return float(-np.mean(y * np.log(p) + (1 - y) * np.log(1 - p)))
+
+def une_etape(X, y, w, b, lr):
+    p = sigmoid(X @ w + b)
+    return w - lr * (X.T @ (p - y)) / len(y), b - lr * (p - y).mean()
+
+X = np.array([[2.0, 0.5], [1.5, 1.0], [-1.0, -0.5], [-2.0, 0.0]])
+y = np.array([1.0, 1.0, 0.0, 0.0])
+
+def historique_pertes(X, y, etapes=10, lr=0.5):
+    w, b = np.zeros(X.shape[1]), 0.0
+    pertes = [perte(sigmoid(X @ w + b), y)]
+    for _ in range(etapes):
+        w, b = une_etape(X, y, w, b, lr)
+        pertes.append(perte(sigmoid(X @ w + b), y))
+    return pertes
+
+h = historique_pertes(X, y, etapes=5)
+print([round(v, 3) for v in h])`,
+              tests: `import numpy as np
+_h = historique_pertes(X, y, etapes=10)
+assert len(_h) == 11, "10 étapes -> 11 mesures (l'état initial compris)"
+assert abs(_h[0] - perte(np.full(4, 0.5), y)) < 1e-9, "Perte initiale : poids nuls -> probas 0.5 partout"
+assert all(_h[i+1] <= _h[i] + 1e-9 for i in range(len(_h) - 1)), "Sur ce problème simple, la perte décroît à chaque étape"
+assert _h[-1] < _h[0] / 2, "Après 10 étapes, la perte a nettement fondu"
+print("TESTS_PASS")`,
+              hints: [
+                'Mesure AVANT la boucle, puis une fois par itération après la mise à jour.',
+                'La longueur attendue (etapes + 1) est le test de santé de ta boucle.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm7l2e3',
+              title: "Défi — Early stopping",
+              instructions: `Entraîner trop longtemps gaspille du GPU et sur-apprend. L'**early stopping** coupe quand la perte stagne : écris \`indice_arret(pertes, patience)\` qui renvoie l'indice de la mesure où l'on aurait dû s'arrêter — le premier indice \`i\` tel que la perte ne s'est plus améliorée (strictement) pendant les \`patience\` mesures suivantes — ou \`None\` si on ne s'arrête jamais.
+
+Formellement : \`i\` est le premier indice où \`min(pertes[i+1 : i+1+patience]) >= pertes[i]\` (avec au moins \`patience\` mesures après \`i\`).`,
+              starterCode: `def indice_arret(pertes, patience=2):
+    ...
+
+print(indice_arret([1.0, 0.8, 0.7, 0.71, 0.72, 0.73], patience=2))
+print(indice_arret([1.0, 0.8, 0.6, 0.4], patience=2))`,
+              solution: `def indice_arret(pertes, patience=2):
+    for i in range(len(pertes) - patience):
+        fenetre = pertes[i + 1 : i + 1 + patience]
+        if min(fenetre) >= pertes[i]:
+            return i
+    return None
+
+print(indice_arret([1.0, 0.8, 0.7, 0.71, 0.72, 0.73], patience=2))
+print(indice_arret([1.0, 0.8, 0.6, 0.4], patience=2))`,
+              tests: `assert indice_arret([1.0, 0.8, 0.7, 0.71, 0.72, 0.73], 2) == 2, "Après l'indice 2 (0.7), plus aucune amélioration pendant 2 mesures"
+assert indice_arret([1.0, 0.8, 0.6, 0.4], 2) is None, "Amélioration continue : on ne s'arrête pas"
+assert indice_arret([0.5, 0.6, 0.7, 0.8], 2) == 0, "Ça empire dès le début : stop immédiat"
+assert indice_arret([1.0, 0.9, 0.95, 0.85, 0.9, 0.95], 2) == 3, "Après le minimum 0.85 (indice 3), plus aucune amélioration : stop à 3"
+assert indice_arret([1.0, 1.0, 1.0, 1.0], 2) == 0, "Stagnation totale (>= inclus) : stop à 0"
+print("TESTS_PASS")`,
+              hints: [
+                'Fenêtre glissante : pertes[i+1 : i+1+patience], comparée à pertes[i].',
+                'range(len(pertes) - patience) garantit une fenêtre complète.',
+                'Le >= (et non >) fait que la stagnation pure déclenche aussi l\'arrêt.',
+              ],
             },
           },
           {
@@ -433,6 +658,102 @@ print("TESTS_PASS")`,
                 'permutation(len(y)) donne des indices mélangés ; X[indices] et y[indices] les appliquent aux DEUX tableaux.',
                 'test = indices[:n_test], train = indices[n_test:] — puis X[train], y[train], X[test], y[test].',
                 'Si le test d\'alignement échoue : tu as mélangé X et y avec des indices différents.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm7l3e2',
+              title: "Vérifier l'équilibre des classes",
+              instructions: `Avant tout split et tout entraînement : la distribution des classes. Écris :
+
+1. \`proportions(y)\` — le dict \`classe → proportion\` (arrondie à 3 décimales),
+2. \`est_desequilibre(y, seuil=0.8)\` — \`True\` si une classe dépasse le seuil.
+
+Un dataset à 95 % de classe 0 rend l'accuracy mensongère (le modèle « toujours 0 » score 95 %) — c'est LE piège des données de fraude, de churn, de pannes.`,
+              starterCode: `import numpy as np
+
+def proportions(y):
+    ...
+
+def est_desequilibre(y, seuil=0.8):
+    ...
+
+y = np.array([0, 0, 0, 0, 1, 0, 0, 0, 0, 0])
+print(proportions(y))
+print(est_desequilibre(y))`,
+              solution: `import numpy as np
+
+def proportions(y):
+    y = np.asarray(y)
+    valeurs, comptes = np.unique(y, return_counts=True)
+    return {int(v): round(float(c) / len(y), 3) for v, c in zip(valeurs, comptes)}
+
+def est_desequilibre(y, seuil=0.8):
+    return any(p >= seuil for p in proportions(y).values())
+
+y = np.array([0, 0, 0, 0, 1, 0, 0, 0, 0, 0])
+print(proportions(y))
+print(est_desequilibre(y))`,
+              tests: `import numpy as np
+_p = proportions(np.array([0, 0, 0, 1]))
+assert _p == {0: 0.75, 1: 0.25}, "3/4 et 1/4"
+assert est_desequilibre(np.array([0]*9 + [1]), seuil=0.8), "90 % d'une classe : déséquilibré"
+assert not est_desequilibre(np.array([0, 1, 0, 1]), seuil=0.8), "50/50 : équilibré"
+assert est_desequilibre(np.array([1, 1]), seuil=0.8), "Une seule classe présente : 100 %"
+print("TESTS_PASS")`,
+              hints: [
+                'np.unique(y, return_counts=True) donne valeurs et comptes d\'un coup.',
+                'any(...) sur les proportions pour le test de seuil.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm7l3e3',
+              title: "Défi — Détecter la fuite train/test",
+              instructions: `L'audit qui démasque les « 99 % d'accuracy » : des exemples du test présents à l'identique dans le train. Écris \`fuite(X_train, X_test)\` qui renvoie :
+
+1. \`"indices"\` : la liste des indices de lignes de \`X_test\` présentes exactement dans \`X_train\` (convertis chaque ligne en tuple pour la comparer via un set),
+2. \`"taux"\` : la fraction de X_test concernée, arrondie à 3 décimales.
+
+Un taux non nul invalide l'évaluation — c'est la première chose à vérifier dans un audit de modèle.`,
+              starterCode: `import numpy as np
+
+def fuite(X_train, X_test):
+    ...
+
+X_train = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+X_test = np.array([[3.0, 4.0], [7.0, 8.0], [1.0, 2.0], [9.0, 9.0]])
+print(fuite(X_train, X_test))`,
+              solution: `import numpy as np
+
+def fuite(X_train, X_test):
+    vues = {tuple(ligne) for ligne in X_train.tolist()}
+    indices = [i for i, ligne in enumerate(X_test.tolist()) if tuple(ligne) in vues]
+    taux = round(len(indices) / len(X_test), 3) if len(X_test) else 0.0
+    return {"indices": indices, "taux": taux}
+
+X_train = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+X_test = np.array([[3.0, 4.0], [7.0, 8.0], [1.0, 2.0], [9.0, 9.0]])
+print(fuite(X_train, X_test))`,
+              tests: `import numpy as np
+_r = fuite(np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),
+           np.array([[3.0, 4.0], [7.0, 8.0], [1.0, 2.0], [9.0, 9.0]]))
+assert _r["indices"] == [0, 2], "Les lignes 0 et 2 du test existent dans le train"
+assert _r["taux"] == 0.5, "2 lignes sur 4"
+_r2 = fuite(np.array([[1.0, 1.0]]), np.array([[2.0, 2.0]]))
+assert _r2 == {"indices": [], "taux": 0.0}, "Aucune fuite"
+_r3 = fuite(np.array([[1.0, 1.0]]), np.array([[1.0, 1.0]]))
+assert _r3["taux"] == 1.0, "Test entièrement contaminé"
+print("TESTS_PASS")`,
+              hints: [
+                'Un set de tuples des lignes du train — les arrays ne sont pas hachables, les tuples oui.',
+                'enumerate sur X_test.tolist() pour collecter les indices contaminés.',
               ],
               needsNumpy: true,
             },

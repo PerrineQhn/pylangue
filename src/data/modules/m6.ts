@@ -87,6 +87,92 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm6l1e2',
+              title: "Document frequency : dans combien de documents ?",
+              instructions: `La brique qu'il te faudra pour l'IDF de la leçon suivante : \`document_frequency(documents)\` compte, pour chaque mot du corpus, **dans combien de documents** il apparaît (pas combien de fois au total !).
+
+Un mot répété 10 fois dans un même document compte pour 1. L'astuce : convertir chaque document en \`set\` avant de compter.`,
+              starterCode: `def document_frequency(documents):
+    ...
+
+docs = ["le chat dort le chat", "le chien dort", "un poisson"]
+df = document_frequency(docs)
+print(df)`,
+              solution: `def document_frequency(documents):
+    df = {}
+    for doc in documents:
+        for mot in set(doc.lower().split()):
+            df[mot] = df.get(mot, 0) + 1
+    return df
+
+docs = ["le chat dort le chat", "le chien dort", "un poisson"]
+df = document_frequency(docs)
+print(df)`,
+              tests: `_df = document_frequency(["le chat dort le chat", "le chien dort", "un poisson"])
+assert _df["le"] == 2, "'le' apparaît dans 2 documents"
+assert _df["chat"] == 1, "'chat' répété dans UN document : df = 1, pas 2 !"
+assert _df["dort"] == 2, "'dort' dans 2 documents"
+assert _df["poisson"] == 1, "'poisson' dans 1 document"
+assert document_frequency([]) == {}, "Corpus vide"
+print("TESTS_PASS")`,
+              hints: [
+                'set(doc.lower().split()) déduplique les mots AU SEIN du document.',
+                'Puis le motif de comptage habituel sur ces sets.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm6l1e3',
+              title: "Défi — La matrice documents × mots complète",
+              instructions: `Assemble le vectoriseur de bout en bout, comme \`CountVectorizer.fit_transform\` : \`matrice_documents(documents)\` renvoie le tuple \`(vocab, matrice)\` où :
+
+1. \`vocab\` est le dict \`mot → index\` trié alphabétiquement (ton exercice précédent),
+2. \`matrice\` est la **liste de listes** \`(n_docs, taille_vocab)\` des comptages : \`matrice[d][vocab[mot]]\` = occurrences du mot dans le document d.
+
+C'est la structure exacte sur laquelle tournaient les moteurs de recherche et les classifieurs avant le deep learning — et encore aujourd'hui les baselines.`,
+              starterCode: `def matrice_documents(documents):
+    ...
+
+vocab, M = matrice_documents(["le chat dort", "le chien mange le os"])
+print(vocab)
+for ligne in M:
+    print(ligne)`,
+              solution: `def matrice_documents(documents):
+    mots = set()
+    for doc in documents:
+        mots.update(doc.lower().split())
+    vocab = {mot: i for i, mot in enumerate(sorted(mots))}
+    matrice = []
+    for doc in documents:
+        ligne = [0] * len(vocab)
+        for mot in doc.lower().split():
+            ligne[vocab[mot]] += 1
+        matrice.append(ligne)
+    return vocab, matrice
+
+vocab, M = matrice_documents(["le chat dort", "le chien mange le os"])
+print(vocab)
+for ligne in M:
+    print(ligne)`,
+              tests: `_v, _M = matrice_documents(["le chat dort", "le chien mange le os"])
+assert _v == {"chat": 0, "chien": 1, "dort": 2, "le": 3, "mange": 4, "os": 5}, "Vocab global trié"
+assert len(_M) == 2 and len(_M[0]) == 6, "Matrice (2 docs, 6 mots)"
+assert _M[0][_v["chat"]] == 1 and _M[0][_v["os"]] == 0, "Comptages du doc 0"
+assert _M[1][_v["le"]] == 2, "'le' apparaît 2 fois dans le doc 1"
+_v2, _M2 = matrice_documents([])
+assert _v2 == {} and _M2 == [], "Corpus vide"
+print("TESTS_PASS")`,
+              hints: [
+                'Étape 1 : le vocab global (union des mots, trié, énuméré).',
+                'Étape 2 : pour chaque doc, une ligne [0]*len(vocab) remplie par le motif de comptage.',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -218,6 +304,101 @@ print("TESTS_PASS")`,
                 'df = sum(1 for d in docs if mot in d) — le nombre de documents contenant le mot.',
                 'tf = doc.count(mot) — les listes Python ont une méthode count.',
                 'chercher : calcule tous les scores puis scores.index(max(scores)).',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm6l2e2',
+              title: "TF relatif : normaliser par la longueur",
+              instructions: `Un mot présent 3 fois dans un tweet pèse plus que 3 fois dans un roman. Le **TF relatif** corrige : \`tf_relatif(doc)\` renvoie le dict \`mot → fréquence / longueur du document\` (le doc est une liste de tokens ; dict vide si liste vide).
+
+Arrondis chaque valeur à 4 décimales. C'est la variante de TF utilisée dans la plupart des formulations sérieuses de TF-IDF.`,
+              starterCode: `def tf_relatif(doc):
+    ...
+
+print(tf_relatif(["le", "chat", "le"]))`,
+              solution: `def tf_relatif(doc):
+    if not doc:
+        return {}
+    tf = {}
+    for mot in doc:
+        tf[mot] = tf.get(mot, 0) + 1
+    return {m: round(c / len(doc), 4) for m, c in tf.items()}
+
+print(tf_relatif(["le", "chat", "le"]))`,
+              tests: `_tf = tf_relatif(["le", "chat", "le"])
+assert _tf == {"le": round(2/3, 4), "chat": round(1/3, 4)}, "Comptages divisés par la longueur"
+assert tf_relatif([]) == {}, "Document vide : dict vide"
+assert tf_relatif(["a"]) == {"a": 1.0}, "Un seul mot : fréquence 1.0"
+assert abs(sum(tf_relatif(["a", "b", "b", "c"]).values()) - 1.0) < 0.001, "Les fréquences relatives somment à ~1"
+print("TESTS_PASS")`,
+              hints: [
+                'Compter d\'abord, puis diviser dans une dict comprehension finale.',
+                'Le cas vide en premier, comme toujours.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm6l2e3',
+              title: "Défi — Classement complet des résultats",
+              instructions: `Ton moteur renvoyait le meilleur document ; un vrai moteur renvoie une **page de résultats classée**. Avec \`idf\` et \`score\` fournis (ceux de la leçon), écris \`rechercher(requete, docs, k)\` qui renvoie la liste des \`k\` indices de documents, triés par score décroissant, **en excluant les documents à score nul** (aucun mot commun avec la requête — les afficher serait du bruit).`,
+              starterCode: `import math
+
+def idf(mot, docs):
+    df = sum(1 for d in docs if mot in d)
+    return math.log(len(docs) / df) if df else 0.0
+
+def score(doc, requete, docs):
+    return sum(doc.count(m) * idf(m, docs) for m in requete)
+
+DOCS = [
+    ["chat", "mange", "poisson"],
+    ["chien", "mange", "os"],
+    ["poisson", "nage", "lac"],
+    ["voiture", "roule", "vite"],
+]
+
+def rechercher(requete, docs, k=3):
+    ...
+
+print(rechercher(["poisson", "mange"], DOCS, k=3))`,
+              solution: `import math
+
+def idf(mot, docs):
+    df = sum(1 for d in docs if mot in d)
+    return math.log(len(docs) / df) if df else 0.0
+
+def score(doc, requete, docs):
+    return sum(doc.count(m) * idf(m, docs) for m in requete)
+
+DOCS = [
+    ["chat", "mange", "poisson"],
+    ["chien", "mange", "os"],
+    ["poisson", "nage", "lac"],
+    ["voiture", "roule", "vite"],
+]
+
+def rechercher(requete, docs, k=3):
+    scores = [(i, score(d, requete, docs)) for i, d in enumerate(docs)]
+    pertinents = [(i, sc) for i, sc in scores if sc > 0]
+    pertinents.sort(key=lambda p: -p[1])
+    return [i for i, _ in pertinents[:k]]
+
+print(rechercher(["poisson", "mange"], DOCS, k=3))`,
+              tests: `_r = rechercher(["poisson", "mange"], DOCS, k=3)
+assert _r[0] == 0, "Le doc 0 (poisson ET mange) doit être premier"
+assert 3 not in _r, "Le doc 'voiture' (score nul) ne doit PAS apparaître"
+assert set(_r) == {0, 1, 2}, "Les trois documents pertinents"
+assert rechercher(["dragon"], DOCS) == [], "Requête sans aucun match : liste vide"
+assert rechercher(["nage"], DOCS, k=1) == [2], "Un seul résultat pertinent"
+print("TESTS_PASS")`,
+              hints: [
+                'Construis les paires (indice, score) avec enumerate, filtre les scores > 0, trie par -score.',
+                'La troncature [:k] vient APRÈS le tri.',
               ],
             },
           },
@@ -365,6 +546,98 @@ print("TESTS_PASS")`,
                 'precision_at_k : sum(1 for r in resultats[:k] if r in pertinents) / k.',
                 'evaluer_moteur : une list comprehension des précisions par cas, puis la moyenne.',
                 'comparer : calcule les deux moyennes et compare — attention au cas d\'égalité.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm6l3e2',
+              title: "Le rappel@k, jumeau de la précision",
+              instructions: `La précision dit « ce que je montre est-il bon ? », le **rappel** dit « ai-je retrouvé tout ce qui existe ? » :
+
+\`rappel_at_k(resultats, pertinents, k)\` = |top-k ∩ pertinents| / |pertinents|.
+
+Convention pour le cas limite : si \`pertinents\` est vide, renvoie \`1.0\` (il n'y avait rien à retrouver — mission trivialement accomplie).`,
+              starterCode: `def rappel_at_k(resultats, pertinents, k):
+    ...
+
+print(rappel_at_k([4, 1, 0], {0, 4, 7}, 3))`,
+              solution: `def rappel_at_k(resultats, pertinents, k):
+    if not pertinents:
+        return 1.0
+    top = resultats[:k]
+    return sum(1 for r in top if r in pertinents) / len(pertinents)
+
+print(rappel_at_k([4, 1, 0], {0, 4, 7}, 3))`,
+              tests: `assert abs(rappel_at_k([4, 1, 0], {0, 4, 7}, 3) - 2/3) < 1e-9, "2 des 3 pertinents retrouvés"
+assert rappel_at_k([1, 2], {1, 2}, 2) == 1.0, "Tout retrouvé"
+assert rappel_at_k([5, 6], {1, 2}, 2) == 0.0, "Rien retrouvé"
+assert rappel_at_k([1], set(), 1) == 1.0, "Aucun pertinent : 1.0 par convention"
+assert abs(rappel_at_k([1, 2, 3], {1, 2, 3, 4}, 2) - 2/4) < 1e-9, "Seul le top-k compte, même si k < nb pertinents"
+print("TESTS_PASS")`,
+              hints: [
+                'Même structure que precision_at_k, mais on divise par len(pertinents).',
+                'Le cas pertinents vide se traite avant la division.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm6l3e3',
+              title: "Défi — La courbe précision selon k",
+              instructions: `Pour choisir combien de chunks injecter dans ton RAG, on trace la précision moyenne **pour plusieurs valeurs de k** : \`courbe_precision(moteur, jeu, valeurs_k)\` renvoie le dict \`k → précision@k moyenne\` (arrondie à 3 décimales).
+
+Le starter fournit \`precision_at_k\`, un moteur jouet et un jeu de test. Bonus d'interprétation : la précision **décroît** presque toujours quand k grandit — chaque résultat supplémentaire est moins sûr que le précédent.`,
+              starterCode: `def precision_at_k(resultats, pertinents, k):
+    top = resultats[:k]
+    return sum(1 for r in top if r in pertinents) / k
+
+def moteur(requete, k):
+    return {"q1": [0, 4, 2], "q2": [2, 1, 0], "q3": [3, 0, 1]}[requete][:k]
+
+JEU = [
+    {"requete": "q1", "pertinents": {0, 4}},
+    {"requete": "q2", "pertinents": {2}},
+    {"requete": "q3", "pertinents": {3, 1}},
+]
+
+def courbe_precision(moteur, jeu, valeurs_k):
+    ...
+
+print(courbe_precision(moteur, JEU, [1, 2, 3]))`,
+              solution: `def precision_at_k(resultats, pertinents, k):
+    top = resultats[:k]
+    return sum(1 for r in top if r in pertinents) / k
+
+def moteur(requete, k):
+    return {"q1": [0, 4, 2], "q2": [2, 1, 0], "q3": [3, 0, 1]}[requete][:k]
+
+JEU = [
+    {"requete": "q1", "pertinents": {0, 4}},
+    {"requete": "q2", "pertinents": {2}},
+    {"requete": "q3", "pertinents": {3, 1}},
+]
+
+def courbe_precision(moteur, jeu, valeurs_k):
+    courbe = {}
+    for k in valeurs_k:
+        scores = [precision_at_k(moteur(cas["requete"], k), cas["pertinents"], k) for cas in jeu]
+        courbe[k] = round(sum(scores) / len(scores), 3)
+    return courbe
+
+print(courbe_precision(moteur, JEU, [1, 2, 3]))`,
+              tests: `_c = courbe_precision(moteur, JEU, [1, 2, 3])
+assert set(_c.keys()) == {1, 2, 3}, "Une entrée par valeur de k"
+assert _c[1] == 1.0, "À k=1, les trois moteurs mettent un pertinent en tête"
+assert _c[2] == round((1.0 + 0.5 + 0.5) / 3, 3), "À k=2 : q1 parfait, q2 et q3 à moitié"
+assert _c[3] == round((2/3 + 1/3 + 2/3) / 3, 3), "À k=3"
+assert _c[1] >= _c[2] >= _c[3], "La précision décroît quand k grandit (sur ce jeu)"
+print("TESTS_PASS")`,
+              hints: [
+                'Une boucle sur valeurs_k, et dedans la moyenne des précisions du jeu (comme evaluer_moteur).',
+                'Arrondis chaque moyenne à 3 décimales avant de la ranger.',
               ],
             },
           },

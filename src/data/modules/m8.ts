@@ -101,6 +101,101 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm8l1e2',
+              title: "L'inventaire des symboles",
+              instructions: `Avant d'entraîner un BPE, on inventorie l'alphabet de départ. Sur un corpus \`{mot_tuple: fréquence}\`, écris :
+
+1. \`symboles(corpus)\` — le **set** de tous les symboles présents,
+2. \`taille_corpus(corpus)\` — le nombre total de mots, fréquences comprises (somme des valeurs),
+3. \`longueur_moyenne(corpus)\` — la longueur moyenne des mots **pondérée par leur fréquence**, arrondie à 2 décimales (\`0.0\` si corpus vide). Cette valeur vaut la fertilité initiale : au départ, chaque mot coûte autant de tokens que de caractères.`,
+              starterCode: `CORPUS = {("l", "o", "w"): 5, ("l", "o", "w", "e", "r"): 2, ("n", "e", "w"): 6}
+
+def symboles(corpus):
+    ...
+
+def taille_corpus(corpus):
+    ...
+
+def longueur_moyenne(corpus):
+    ...
+
+print(sorted(symboles(CORPUS)))
+print(taille_corpus(CORPUS))
+print(longueur_moyenne(CORPUS))`,
+              solution: `CORPUS = {("l", "o", "w"): 5, ("l", "o", "w", "e", "r"): 2, ("n", "e", "w"): 6}
+
+def symboles(corpus):
+    result = set()
+    for mot in corpus:
+        result.update(mot)
+    return result
+
+def taille_corpus(corpus):
+    return sum(corpus.values())
+
+def longueur_moyenne(corpus):
+    total = taille_corpus(corpus)
+    if total == 0:
+        return 0.0
+    return round(sum(len(mot) * freq for mot, freq in corpus.items()) / total, 2)
+
+print(sorted(symboles(CORPUS)))
+print(taille_corpus(CORPUS))
+print(longueur_moyenne(CORPUS))`,
+              tests: `assert symboles(CORPUS) == {"l", "o", "w", "e", "r", "n"}, "Les 6 symboles de l'alphabet de départ"
+assert taille_corpus(CORPUS) == 13, "5 + 2 + 6 = 13 mots"
+assert longueur_moyenne(CORPUS) == round((3*5 + 5*2 + 3*6) / 13, 2), "Longueur pondérée par les fréquences"
+assert symboles({}) == set() and taille_corpus({}) == 0 and longueur_moyenne({}) == 0.0, "Corpus vide"
+print("TESTS_PASS")`,
+              hints: [
+                'set.update(mot) ajoute tous les éléments d\'un tuple au set.',
+                'La pondération : len(mot) * freq, sommé, divisé par le total des fréquences.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm8l1e3',
+              title: "Défi — Préparer un corpus BPE depuis du texte brut",
+              instructions: `Fais le pont entre le texte réel et la représentation BPE : \`preparer_corpus(texte)\` transforme une chaîne en dict \`{tuple_de_caracteres: frequence}\` :
+
+1. minuscules, découpe sur les espaces,
+2. chaque mot devient un tuple de caractères **terminé par le symbole spécial \`"</w>"\`** (fin de mot — c'est ainsi que le vrai BPE distingue « pomme de terre » de « pommedeterre » et sait où recoller les espaces au décodage),
+3. les fréquences s'additionnent pour les mots répétés.`,
+              starterCode: `def preparer_corpus(texte):
+    ...
+
+corpus = preparer_corpus("le chat le chien")
+for mot, freq in corpus.items():
+    print(mot, freq)`,
+              solution: `def preparer_corpus(texte):
+    corpus = {}
+    for mot in texte.lower().split():
+        cle = tuple(mot) + ("</w>",)
+        corpus[cle] = corpus.get(cle, 0) + 1
+    return corpus
+
+corpus = preparer_corpus("le chat le chien")
+for mot, freq in corpus.items():
+    print(mot, freq)`,
+              tests: `_c = preparer_corpus("le chat le chien")
+assert _c[("l", "e", "</w>")] == 2, "'le' apparaît 2 fois"
+assert _c[("c", "h", "a", "t", "</w>")] == 1, "'chat' découpé en caractères + fin de mot"
+assert len(_c) == 3, "3 mots distincts"
+assert preparer_corpus("") == {}, "Texte vide"
+_c2 = preparer_corpus("Ab ab AB")
+assert _c2 == {("a", "b", "</w>"): 3}, "Normalisation : un seul mot, fréquence 3"
+print("TESTS_PASS")`,
+              hints: [
+                'tuple(mot) éclate la chaîne en caractères ; + ("</w>",) ajoute le marqueur (attention à la virgule du tuple à 1 élément !).',
+                'Le motif de comptage habituel sur ces tuples.',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -252,6 +347,165 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm8l2e2',
+              title: "Rejouer une liste de fusions",
+              instructions: `Entraînement et encodage partagent cette brique : \`appliquer_fusions(corpus, fusions)\` applique une **liste** de fusions, dans l'ordre, à tout le corpus (avec \`appliquer_fusion\` fourni), et renvoie le corpus final.
+
+Vérifie au passage la propriété clé : appliquer [f1, f2] d'un coup = appliquer f1 puis f2.`,
+              starterCode: `def fusionner_mot(mot, paire):
+    nouveau, i = [], 0
+    while i < len(mot):
+        if i < len(mot) - 1 and (mot[i], mot[i+1]) == paire:
+            nouveau.append(mot[i] + mot[i+1]); i += 2
+        else:
+            nouveau.append(mot[i]); i += 1
+    return tuple(nouveau)
+
+def appliquer_fusion(corpus, paire):
+    nouveau = {}
+    for mot, freq in corpus.items():
+        m = fusionner_mot(mot, paire)
+        nouveau[m] = nouveau.get(m, 0) + freq
+    return nouveau
+
+def appliquer_fusions(corpus, fusions):
+    ...
+
+corpus = {("l", "o", "w"): 5, ("l", "o", "w", "e", "r"): 2}
+print(appliquer_fusions(corpus, [("l", "o"), ("lo", "w")]))`,
+              solution: `def fusionner_mot(mot, paire):
+    nouveau, i = [], 0
+    while i < len(mot):
+        if i < len(mot) - 1 and (mot[i], mot[i+1]) == paire:
+            nouveau.append(mot[i] + mot[i+1]); i += 2
+        else:
+            nouveau.append(mot[i]); i += 1
+    return tuple(nouveau)
+
+def appliquer_fusion(corpus, paire):
+    nouveau = {}
+    for mot, freq in corpus.items():
+        m = fusionner_mot(mot, paire)
+        nouveau[m] = nouveau.get(m, 0) + freq
+    return nouveau
+
+def appliquer_fusions(corpus, fusions):
+    for paire in fusions:
+        corpus = appliquer_fusion(corpus, paire)
+    return corpus
+
+corpus = {("l", "o", "w"): 5, ("l", "o", "w", "e", "r"): 2}
+print(appliquer_fusions(corpus, [("l", "o"), ("lo", "w")]))`,
+              tests: `_c = {("l", "o", "w"): 5, ("l", "o", "w", "e", "r"): 2}
+_r = appliquer_fusions(_c, [("l", "o"), ("lo", "w")])
+assert _r == {("low",): 5, ("low", "e", "r"): 2}, "Les deux fusions en cascade"
+assert appliquer_fusions(_c, []) == _c, "Aucune fusion : corpus inchangé"
+_etape1 = appliquer_fusion(_c, ("l", "o"))
+_etape2 = appliquer_fusion(_etape1, ("lo", "w"))
+assert appliquer_fusions(_c, [("l", "o"), ("lo", "w")]) == _etape2, "Équivalence : liste = enchaînement manuel"
+print("TESTS_PASS")`,
+              hints: [
+                'Une boucle qui réaffecte corpus = appliquer_fusion(corpus, paire).',
+                'L\'ordre de la liste EST l\'ordre d\'application.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm8l2e3',
+              title: "Défi — La courbe de compression",
+              instructions: `Combien de fusions faut-il ? On trace la **longueur totale du corpus en tokens** après chaque fusion : \`courbe_compression(corpus, n_fusions)\` renvoie la liste \`[total_initial, apres_fusion_1, ...]\` où chaque total = somme de \`len(mot) × fréquence\`.
+
+Utilise les briques fournies (compter, meilleure paire, appliquer). La courbe décroît vite puis plafonne — c'est elle qui guide le choix de la taille de vocabulaire des vrais tokenizers.`,
+              starterCode: `def fusionner_mot(mot, paire):
+    nouveau, i = [], 0
+    while i < len(mot):
+        if i < len(mot) - 1 and (mot[i], mot[i+1]) == paire:
+            nouveau.append(mot[i] + mot[i+1]); i += 2
+        else:
+            nouveau.append(mot[i]); i += 1
+    return tuple(nouveau)
+
+def appliquer_fusion(corpus, paire):
+    nouveau = {}
+    for mot, freq in corpus.items():
+        m = fusionner_mot(mot, paire)
+        nouveau[m] = nouveau.get(m, 0) + freq
+    return nouveau
+
+def compter_paires(corpus):
+    paires = {}
+    for mot, freq in corpus.items():
+        for i in range(len(mot) - 1):
+            paires[(mot[i], mot[i+1])] = paires.get((mot[i], mot[i+1]), 0) + freq
+    return paires
+
+def total_tokens(corpus):
+    return sum(len(mot) * freq for mot, freq in corpus.items())
+
+def courbe_compression(corpus, n_fusions):
+    ...
+
+corpus = {("l","o","w"): 5, ("l","o","w","e","r"): 2, ("n","e","w","e","r"): 6}
+print(courbe_compression(corpus, 4))`,
+              solution: `def fusionner_mot(mot, paire):
+    nouveau, i = [], 0
+    while i < len(mot):
+        if i < len(mot) - 1 and (mot[i], mot[i+1]) == paire:
+            nouveau.append(mot[i] + mot[i+1]); i += 2
+        else:
+            nouveau.append(mot[i]); i += 1
+    return tuple(nouveau)
+
+def appliquer_fusion(corpus, paire):
+    nouveau = {}
+    for mot, freq in corpus.items():
+        m = fusionner_mot(mot, paire)
+        nouveau[m] = nouveau.get(m, 0) + freq
+    return nouveau
+
+def compter_paires(corpus):
+    paires = {}
+    for mot, freq in corpus.items():
+        for i in range(len(mot) - 1):
+            paires[(mot[i], mot[i+1])] = paires.get((mot[i], mot[i+1]), 0) + freq
+    return paires
+
+def total_tokens(corpus):
+    return sum(len(mot) * freq for mot, freq in corpus.items())
+
+def courbe_compression(corpus, n_fusions):
+    courbe = [total_tokens(corpus)]
+    for _ in range(n_fusions):
+        paires = compter_paires(corpus)
+        if not paires:
+            break
+        best = max(paires, key=paires.get)
+        corpus = appliquer_fusion(corpus, best)
+        courbe.append(total_tokens(corpus))
+    return courbe
+
+corpus = {("l","o","w"): 5, ("l","o","w","e","r"): 2, ("n","e","w","e","r"): 6}
+print(courbe_compression(corpus, 4))`,
+              tests: `_c = {("l","o","w"): 5, ("l","o","w","e","r"): 2, ("n","e","w","e","r"): 6}
+_courbe = courbe_compression(_c, 4)
+assert _courbe[0] == 3*5 + 5*2 + 5*6, "Total initial : 55 tokens"
+assert len(_courbe) == 5, "Initial + 4 fusions"
+assert all(_courbe[i+1] < _courbe[i] for i in range(len(_courbe)-1)), "Chaque fusion RÉDUIT le total"
+assert _courbe[1] == _courbe[0] - 8, "La 1re fusion (fréquence 8) économise 8 tokens"
+_mini = courbe_compression({("a", "b"): 1}, 10)
+assert _mini == [2, 1], "Arrêt anticipé quand plus rien à fusionner"
+print("TESTS_PASS")`,
+              hints: [
+                'La boucle d\'entraînement du module, avec un total_tokens enregistré à chaque tour.',
+                'Une fusion de fréquence f économise exactement f tokens — vérifie-le sur la courbe !',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -384,6 +638,156 @@ print("TESTS_PASS")`,
                 'encoder_mot : tuple(mot) transforme "abc" en ("a","b","c") ; puis une boucle sur les fusions DANS L\'ORDRE.',
                 'encoder : tokens.extend(...) (pas append !) pour aplatir les listes.',
                 'Si "lower" donne autre chose que [low, er] : vérifie que tu appliques bien TOUTES les fusions à CHAQUE mot.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm8l3e2',
+              title: "Compter les tokens d'un texte",
+              instructions: `Le compteur que tout le monde branche avant d'appeler une API : \`compter_tokens(texte, fusions)\` renvoie le nombre total de tokens du texte encodé (réutilise \`encoder_mot\` fourni), et \`mot_le_plus_cher(texte, fusions)\` renvoie le mot du texte qui coûte le plus de tokens (le premier en cas d'égalité).`,
+              starterCode: `def fusionner_mot(mot, paire):
+    nouveau, i = [], 0
+    while i < len(mot):
+        if i < len(mot) - 1 and (mot[i], mot[i+1]) == paire:
+            nouveau.append(mot[i] + mot[i+1]); i += 2
+        else:
+            nouveau.append(mot[i]); i += 1
+    return tuple(nouveau)
+
+def encoder_mot(mot, fusions):
+    symboles = tuple(mot)
+    for paire in fusions:
+        symboles = fusionner_mot(symboles, paire)
+    return list(symboles)
+
+FUSIONS = [("e", "r"), ("l", "o"), ("lo", "w"), ("n", "e"), ("ne", "w")]
+
+def compter_tokens(texte, fusions):
+    ...
+
+def mot_le_plus_cher(texte, fusions):
+    ...
+
+print(compter_tokens("new lower generation", FUSIONS))
+print(mot_le_plus_cher("new lower generation", FUSIONS))`,
+              solution: `def fusionner_mot(mot, paire):
+    nouveau, i = [], 0
+    while i < len(mot):
+        if i < len(mot) - 1 and (mot[i], mot[i+1]) == paire:
+            nouveau.append(mot[i] + mot[i+1]); i += 2
+        else:
+            nouveau.append(mot[i]); i += 1
+    return tuple(nouveau)
+
+def encoder_mot(mot, fusions):
+    symboles = tuple(mot)
+    for paire in fusions:
+        symboles = fusionner_mot(symboles, paire)
+    return list(symboles)
+
+FUSIONS = [("e", "r"), ("l", "o"), ("lo", "w"), ("n", "e"), ("ne", "w")]
+
+def compter_tokens(texte, fusions):
+    return sum(len(encoder_mot(m, fusions)) for m in texte.split())
+
+def mot_le_plus_cher(texte, fusions):
+    mots = texte.split()
+    if not mots:
+        return ""
+    return max(mots, key=lambda m: len(encoder_mot(m, fusions)))
+
+print(compter_tokens("new lower generation", FUSIONS))
+print(mot_le_plus_cher("new lower generation", FUSIONS))`,
+              tests: `assert compter_tokens("new", FUSIONS) == 1, "'new' entièrement fusionné"
+assert compter_tokens("new lower", FUSIONS) == 1 + 2, "new (1) + low/er (2)"
+assert compter_tokens("", FUSIONS) == 0, "Texte vide : 0"
+assert mot_le_plus_cher("new lower generation", FUSIONS) == "generation", "Mot hors distribution : le plus coûteux"
+assert mot_le_plus_cher("new new", FUSIONS) == "new", "Égalité : le premier"
+print("TESTS_PASS")`,
+              hints: [
+                'sum(len(encoder_mot(m, fusions)) for m in texte.split()).',
+                'max avec key=lambda m: len(encoder_mot(m, fusions)).',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm8l3e3',
+              title: "Défi — Le comparateur multilingue",
+              instructions: `Le livrable du comité d'architecture : \`comparer_langues(textes, fusions)\` où \`textes\` est un dict \`langue → texte\`, renvoie un dict \`langue → fertilité\` (tokens / mots, arrondie à 2 décimales), et \`langue_la_plus_chere(textes, fusions)\` renvoie le nom de la langue à la fertilité maximale.
+
+Avec le mini-BPE « anglophone » fourni, l'anglais sortira avantagé — la démonstration exacte du biais de tokenisation dont on parle dans les vrais arbitrages multilingues.`,
+              starterCode: `def fusionner_mot(mot, paire):
+    nouveau, i = [], 0
+    while i < len(mot):
+        if i < len(mot) - 1 and (mot[i], mot[i+1]) == paire:
+            nouveau.append(mot[i] + mot[i+1]); i += 2
+        else:
+            nouveau.append(mot[i]); i += 1
+    return tuple(nouveau)
+
+def encoder_mot(mot, fusions):
+    symboles = tuple(mot)
+    for paire in fusions:
+        symboles = fusionner_mot(symboles, paire)
+    return list(symboles)
+
+FUSIONS = [("e", "r"), ("t", "h"), ("th", "e"), ("i", "n"), ("in", "g"), ("n", "e"), ("ne", "w")]
+
+def comparer_langues(textes, fusions):
+    ...
+
+def langue_la_plus_chere(textes, fusions):
+    ...
+
+TEXTES = {"anglais": "the new thing", "islandais": "nyja hluturinn hennar"}
+print(comparer_langues(TEXTES, FUSIONS))
+print(langue_la_plus_chere(TEXTES, FUSIONS))`,
+              solution: `def fusionner_mot(mot, paire):
+    nouveau, i = [], 0
+    while i < len(mot):
+        if i < len(mot) - 1 and (mot[i], mot[i+1]) == paire:
+            nouveau.append(mot[i] + mot[i+1]); i += 2
+        else:
+            nouveau.append(mot[i]); i += 1
+    return tuple(nouveau)
+
+def encoder_mot(mot, fusions):
+    symboles = tuple(mot)
+    for paire in fusions:
+        symboles = fusionner_mot(symboles, paire)
+    return list(symboles)
+
+FUSIONS = [("e", "r"), ("t", "h"), ("th", "e"), ("i", "n"), ("in", "g"), ("n", "e"), ("ne", "w")]
+
+def fertilite(texte, fusions):
+    mots = texte.split()
+    tokens = sum(len(encoder_mot(m, fusions)) for m in mots)
+    return round(tokens / len(mots), 2)
+
+def comparer_langues(textes, fusions):
+    return {langue: fertilite(t, fusions) for langue, t in textes.items()}
+
+def langue_la_plus_chere(textes, fusions):
+    fertilites = comparer_langues(textes, fusions)
+    return max(fertilites, key=fertilites.get)
+
+TEXTES = {"anglais": "the new thing", "islandais": "nyja hluturinn hennar"}
+print(comparer_langues(TEXTES, FUSIONS))
+print(langue_la_plus_chere(TEXTES, FUSIONS))`,
+              tests: `_r = comparer_langues({"anglais": "the new thing", "islandais": "nyja hluturinn hennar"}, FUSIONS)
+assert _r["anglais"] < _r["islandais"], "Le BPE 'anglophone' avantage l'anglais — le biais de tokenisation, démontré"
+assert _r["anglais"] == round((1 + 1 + 2) / 3, 2), "the (1) + new (1) + th/ing (2)"
+assert langue_la_plus_chere({"anglais": "the new thing", "islandais": "nyja hluturinn hennar"}, FUSIONS) == "islandais", "La langue la plus chère"
+_solo = comparer_langues({"x": "the the"}, FUSIONS)
+assert _solo == {"x": 1.0}, "Fertilité parfaite : 1 token par mot"
+print("TESTS_PASS")`,
+              hints: [
+                'Une fonction fertilite(texte) interne, puis une dict comprehension par langue.',
+                'max(dict, key=dict.get) renvoie la clé du maximum.',
               ],
             },
           },

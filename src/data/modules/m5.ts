@@ -109,6 +109,121 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm5l1e2',
+              title: "Normes et distances",
+              instructions: `Deux mesures que tu utiliseras sans cesse, à écrire une fois à la main pour ne plus jamais les confondre :
+
+1. \`norme(v)\` — la norme L2 d'un vecteur : \`sqrt(v @ v)\` (sans np.linalg.norm !),
+2. \`distance(u, v)\` — la distance euclidienne : la norme de \`u - v\`,
+3. \`plus_proche(E, q)\` — l'indice de la ligne de \`E\` la plus proche de \`q\` **au sens de la distance** (np.argmin sur la liste des distances).
+
+Note le contraste avec la leçon : cosinus = direction, distance = position. Les deux servent, selon que tes vecteurs sont normalisés ou non.`,
+              starterCode: `import numpy as np
+
+def norme(v):
+    ...
+
+def distance(u, v):
+    ...
+
+def plus_proche(E, q):
+    ...
+
+E = np.array([[0.0, 0.0], [3.0, 4.0], [1.0, 1.0]])
+print(norme(np.array([3.0, 4.0])))
+print(distance(np.array([0.0, 0.0]), np.array([3.0, 4.0])))
+print(plus_proche(E, np.array([1.2, 0.9])))`,
+              solution: `import numpy as np
+
+def norme(v):
+    return float(np.sqrt(v @ v))
+
+def distance(u, v):
+    return norme(u - v)
+
+def plus_proche(E, q):
+    distances = [distance(ligne, q) for ligne in E]
+    return int(np.argmin(distances))
+
+E = np.array([[0.0, 0.0], [3.0, 4.0], [1.0, 1.0]])
+print(norme(np.array([3.0, 4.0])))
+print(distance(np.array([0.0, 0.0]), np.array([3.0, 4.0])))
+print(plus_proche(E, np.array([1.2, 0.9])))`,
+              tests: `import numpy as np
+assert abs(norme(np.array([3.0, 4.0])) - 5.0) < 1e-9, "sqrt(9+16) = 5 : le triangle 3-4-5"
+assert abs(norme(np.array([0.0, 0.0]))) < 1e-9, "Vecteur nul : norme 0"
+assert abs(distance(np.array([1.0, 1.0]), np.array([4.0, 5.0])) - 5.0) < 1e-9, "Même triangle, déplacé"
+_E = np.array([[0.0, 0.0], [3.0, 4.0], [1.0, 1.0]])
+assert plus_proche(_E, np.array([1.2, 0.9])) == 2, "Le point (1,1) est le plus proche"
+assert plus_proche(_E, np.array([2.9, 4.1])) == 1, "Le point (3,4)"
+print("TESTS_PASS")`,
+              hints: [
+                'v @ v est la somme des carrés — la racine donne la norme.',
+                'distance : réutilise norme sur u - v (soustraction vectorisée).',
+                'np.argmin donne l\'indice du minimum ; pense à convertir en int().',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm5l1e3',
+              title: "Défi — Padding de séquences",
+              instructions: `Les phrases n'ont pas toutes la même longueur, mais un batch GPU doit être une matrice rectangulaire : on complète avec des zéros (**padding**) — exactement ce que fait \`padding=True\` chez Hugging Face. Écris \`pad_sequences(sequences, longueur=None)\` :
+
+1. si \`longueur\` est \`None\`, prends la longueur de la plus longue séquence,
+2. renvoie une matrice numpy \`(n, longueur)\` d'entiers initialisée à 0, chaque ligne recevant les ids de sa séquence (tronquée si trop longue),
+3. renvoie aussi le **masque** \`(n, longueur)\` : 1 sur les vraies positions, 0 sur le padding — le futur "attention mask".
+
+Renvoie le tuple \`(matrice, masque)\`.`,
+              starterCode: `import numpy as np
+
+def pad_sequences(sequences, longueur=None):
+    ...
+
+seqs = [[5, 2, 9], [7], [1, 3, 4, 8]]
+M, masque = pad_sequences(seqs)
+print(M)
+print(masque)`,
+              solution: `import numpy as np
+
+def pad_sequences(sequences, longueur=None):
+    if longueur is None:
+        longueur = max(len(s) for s in sequences)
+    n = len(sequences)
+    M = np.zeros((n, longueur), dtype=int)
+    masque = np.zeros((n, longueur), dtype=int)
+    for i, seq in enumerate(sequences):
+        seq = seq[:longueur]
+        M[i, :len(seq)] = seq
+        masque[i, :len(seq)] = 1
+    return M, masque
+
+seqs = [[5, 2, 9], [7], [1, 3, 4, 8]]
+M, masque = pad_sequences(seqs)
+print(M)
+print(masque)`,
+              tests: `import numpy as np
+_M, _m = pad_sequences([[5, 2, 9], [7], [1, 3, 4, 8]])
+assert _M.shape == (3, 4), "3 séquences, longueur max 4"
+assert list(_M[1]) == [7, 0, 0, 0], "Séquence courte complétée de zéros"
+assert list(_m[1]) == [1, 0, 0, 0], "Le masque marque les vraies positions"
+assert list(_M[2]) == [1, 3, 4, 8], "La plus longue remplit sa ligne"
+_M2, _m2 = pad_sequences([[1, 2, 3]], longueur=2)
+assert list(_M2[0]) == [1, 2], "Longueur imposée : troncature"
+print("TESTS_PASS")`,
+              hints: [
+                'max(len(s) for s in sequences) pour la longueur automatique.',
+                'M[i, :len(seq)] = seq remplit le début de la ligne — le slicing en écriture.',
+                'Le masque suit exactement le même remplissage, avec des 1.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -216,6 +331,94 @@ print("TESTS_PASS")`,
               hints: [
                 'cosinus : (u @ v) divisé par le produit des deux normes.',
                 'chercher : calcule la liste des similarités puis np.argmax. Pense à convertir en int().',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm5l2e2',
+              title: "Top-k d'un vecteur de scores",
+              instructions: `La brique de tout retrieval : \`top_k_indices(scores, k)\` renvoie les indices des \`k\` plus grands scores, du plus grand au plus petit (liste d'\`int\`).
+
+L'outil : \`np.argsort(scores)\` trie en croissant → \`[::-1]\` inverse → \`[:k]\` tronque. Une ligne, à connaître par cœur.`,
+              starterCode: `import numpy as np
+
+def top_k_indices(scores, k):
+    ...
+
+s = np.array([0.1, 0.9, 0.4, 0.7])
+print(top_k_indices(s, 2))`,
+              solution: `import numpy as np
+
+def top_k_indices(scores, k):
+    return [int(i) for i in np.argsort(scores)[::-1][:k]]
+
+s = np.array([0.1, 0.9, 0.4, 0.7])
+print(top_k_indices(s, 2))`,
+              tests: `import numpy as np
+assert top_k_indices(np.array([0.1, 0.9, 0.4, 0.7]), 2) == [1, 3], "Les indices des 2 meilleurs, ordonnés"
+assert top_k_indices(np.array([5.0]), 1) == [0], "Un seul élément"
+assert top_k_indices(np.array([1.0, 2.0, 3.0]), 5) == [2, 1, 0], "k trop grand : tous les indices, triés"
+assert all(isinstance(i, int) for i in top_k_indices(np.array([1.0, 2.0]), 2)), "Des int Python, pas des np.int64"
+print("TESTS_PASS")`,
+              hints: [
+                'argsort → [::-1] → [:k], puis conversion int.',
+                'np.argsort trie les INDICES par valeur croissante — c\'est l\'inversion qui donne le "top".',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm5l2e3',
+              title: "Défi — Le retrieval complet, vectorisé",
+              instructions: `Assemble le moteur final, celui d'une vraie base vectorielle : \`chercher_top_k(E, q, k)\` :
+
+1. normalise les lignes de \`E\` et le vecteur \`q\` (norme L2),
+2. calcule TOUS les cosinus en une opération (\`E_norm @ q_norm\`),
+3. renvoie la liste des \`k\` indices les plus similaires, dans l'ordre.
+
+Zéro boucle Python (sauf la conversion finale en int) : tout en vectorisé.`,
+              starterCode: `import numpy as np
+
+def chercher_top_k(E, q, k):
+    ...
+
+E = np.array([[0.9, 0.1, 0.0],
+              [0.8, 0.3, 0.1],
+              [0.0, 0.1, 0.9],
+              [0.1, 0.0, 0.8]])
+q = np.array([1.0, 0.2, 0.0])
+print(chercher_top_k(E, q, 2))`,
+              solution: `import numpy as np
+
+def chercher_top_k(E, q, k):
+    E_norm = E / np.linalg.norm(E, axis=1)[:, None]
+    q_norm = q / np.linalg.norm(q)
+    scores = E_norm @ q_norm
+    return [int(i) for i in np.argsort(scores)[::-1][:k]]
+
+E = np.array([[0.9, 0.1, 0.0],
+              [0.8, 0.3, 0.1],
+              [0.0, 0.1, 0.9],
+              [0.1, 0.0, 0.8]])
+q = np.array([1.0, 0.2, 0.0])
+print(chercher_top_k(E, q, 2))`,
+              tests: `import numpy as np
+_E = np.array([[0.9, 0.1, 0.0], [0.8, 0.3, 0.1], [0.0, 0.1, 0.9], [0.1, 0.0, 0.8]])
+_q = np.array([1.0, 0.2, 0.0])
+_r = chercher_top_k(_E, _q, 2)
+assert sorted(_r) == [0, 1], "Les deux vecteurs proches de la requête sortent en tête"
+assert chercher_top_k(_E, np.array([0.0, 0.0, 1.0]), 1) == [2], "Requête orientée 3e dimension"
+_r2 = chercher_top_k(_E * 100, _q * 7, 2)
+assert _r2 == _r, "La normalisation rend le résultat insensible aux échelles"
+print("TESTS_PASS")`,
+              hints: [
+                'La normalisation des lignes : E / normes[:, None] (le broadcasting du module).',
+                'Puis argsort inversé tronqué, comme au top-k.',
               ],
               needsNumpy: true,
             },
@@ -352,6 +555,117 @@ print("TESTS_PASS")`,
                 'matrice_similarite : deux lignes — normaliser, puis En @ En.T.',
                 'voisins : np.argsort(S[i])[::-1] inverse le tri (décroissant), puis filtre ordre != i.',
                 'paires_suspectes : double boucle avec range(i + 1, n) pour ne compter chaque paire qu\'une fois.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm5l3e2',
+              title: "Statistiques d'une matrice de similarité",
+              instructions: `Avant de fixer un seuil de déduplication, on regarde la distribution des similarités. Écris \`similarite_moyenne(S)\` : la moyenne des similarités **hors diagonale** (la diagonale de 1 fausserait tout), en \`float\` arrondi à 3 décimales.
+
+L'outil : \`np.eye(n, dtype=bool)\` crée le masque de la diagonale ; \`~masque\` l'inverse ; \`S[~masque]\` extrait tous les éléments hors diagonale d'un coup.`,
+              starterCode: `import numpy as np
+
+def similarite_moyenne(S):
+    ...
+
+S = np.array([[1.0, 0.8, 0.2],
+              [0.8, 1.0, 0.4],
+              [0.2, 0.4, 1.0]])
+print(similarite_moyenne(S))`,
+              solution: `import numpy as np
+
+def similarite_moyenne(S):
+    n = S.shape[0]
+    hors_diag = S[~np.eye(n, dtype=bool)]
+    return round(float(hors_diag.mean()), 3)
+
+S = np.array([[1.0, 0.8, 0.2],
+              [0.8, 1.0, 0.4],
+              [0.2, 0.4, 1.0]])
+print(similarite_moyenne(S))`,
+              tests: `import numpy as np
+_S = np.array([[1.0, 0.8, 0.2], [0.8, 1.0, 0.4], [0.2, 0.4, 1.0]])
+assert similarite_moyenne(_S) == round((0.8 + 0.2 + 0.8 + 0.4 + 0.2 + 0.4) / 6, 3), "Moyenne des 6 valeurs hors diagonale"
+_S2 = np.array([[1.0, 0.5], [0.5, 1.0]])
+assert similarite_moyenne(_S2) == 0.5, "Cas 2x2"
+assert isinstance(similarite_moyenne(_S2), float), "Un float Python"
+print("TESTS_PASS")`,
+              hints: [
+                'np.eye(n, dtype=bool) → True sur la diagonale ; ~ inverse le masque booléen.',
+                'S[masque_booleen] aplatit et extrait — l\'indexation booléenne de NumPy.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm5l3e3',
+              title: "Défi — Grouper les doublons",
+              instructions: `Le livrable final de la mission déduplication : des **groupes** de documents quasi identiques (pas juste des paires). Écris \`grouper_doublons(S, seuil)\` avec l'algorithme glouton :
+
+1. parcours les indices dans l'ordre ; si \`i\` est déjà assigné, passe,
+2. sinon crée un groupe avec \`i\` et **tous les j > i non assignés** tels que \`S[i, j] > seuil\`, et marque-les assignés,
+3. renvoie la liste des groupes d'au moins 2 éléments (listes d'indices croissants).`,
+              starterCode: `import numpy as np
+
+def grouper_doublons(S, seuil):
+    ...
+
+S = np.array([
+    [1.0, 0.99, 0.1, 0.98],
+    [0.99, 1.0, 0.2, 0.97],
+    [0.1, 0.2, 1.0, 0.15],
+    [0.98, 0.97, 0.15, 1.0],
+])
+print(grouper_doublons(S, 0.95))`,
+              solution: `import numpy as np
+
+def grouper_doublons(S, seuil):
+    n = S.shape[0]
+    assigne = set()
+    groupes = []
+    for i in range(n):
+        if i in assigne:
+            continue
+        groupe = [i]
+        assigne.add(i)
+        for j in range(i + 1, n):
+            if j not in assigne and S[i, j] > seuil:
+                groupe.append(j)
+                assigne.add(j)
+        if len(groupe) >= 2:
+            groupes.append(groupe)
+    return groupes
+
+S = np.array([
+    [1.0, 0.99, 0.1, 0.98],
+    [0.99, 1.0, 0.2, 0.97],
+    [0.1, 0.2, 1.0, 0.15],
+    [0.98, 0.97, 0.15, 1.0],
+])
+print(grouper_doublons(S, 0.95))`,
+              tests: `import numpy as np
+_S = np.array([
+    [1.0, 0.99, 0.1, 0.98],
+    [0.99, 1.0, 0.2, 0.97],
+    [0.1, 0.2, 1.0, 0.15],
+    [0.98, 0.97, 0.15, 1.0],
+])
+assert grouper_doublons(_S, 0.95) == [[0, 1, 3]], "0, 1 et 3 forment un groupe ; 2 reste isolé"
+assert grouper_doublons(_S, 0.999) == [], "Seuil trop haut : aucun doublon"
+_S2 = np.array([[1.0, 0.99], [0.99, 1.0]])
+assert grouper_doublons(_S2, 0.9) == [[0, 1]], "Une simple paire"
+assert grouper_doublons(np.eye(3), 0.5) == [], "Identité : personne ne se ressemble"
+print("TESTS_PASS")`,
+              hints: [
+                'Un set "assigne" évite qu\'un document apparaisse dans deux groupes.',
+                'Le filtre final len(groupe) >= 2 écarte les documents isolés.',
+                'range(i + 1, n) : seule la moitié supérieure de la matrice compte.',
               ],
               needsNumpy: true,
             },

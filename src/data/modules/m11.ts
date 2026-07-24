@@ -113,6 +113,143 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm11l1e2',
+              title: "Inspecter un historique de conversation",
+              instructions: `Trois utilitaires qu'on retrouve dans tout backend de chatbot :
+
+1. \`compter_tours(messages)\` — le nombre de messages \`user\` (un tour = une question de l'utilisateur),
+2. \`dernier_du_role(messages, role)\` — le \`content\` du dernier message de ce rôle, ou \`None\`,
+3. \`alternance_valide(messages)\` — \`True\` si, après un éventuel message \`system\` en tête, les rôles alternent strictement \`user\`/\`assistant\` en commençant par \`user\` (les API rejettent les historiques mal alternés !).`,
+              starterCode: `def compter_tours(messages):
+    ...
+
+def dernier_du_role(messages, role):
+    ...
+
+def alternance_valide(messages):
+    ...
+
+HISTORIQUE = [
+    {"role": "system", "content": "Sois concis."},
+    {"role": "user", "content": "Salut"},
+    {"role": "assistant", "content": "Bonjour !"},
+    {"role": "user", "content": "Explique le RAG"},
+]
+print(compter_tours(HISTORIQUE))
+print(dernier_du_role(HISTORIQUE, "assistant"))
+print(alternance_valide(HISTORIQUE))`,
+              solution: `def compter_tours(messages):
+    return sum(1 for m in messages if m["role"] == "user")
+
+def dernier_du_role(messages, role):
+    for m in reversed(messages):
+        if m["role"] == role:
+            return m["content"]
+    return None
+
+def alternance_valide(messages):
+    reste = messages[1:] if messages and messages[0]["role"] == "system" else messages
+    attendu = "user"
+    for m in reste:
+        if m["role"] != attendu:
+            return False
+        attendu = "assistant" if attendu == "user" else "user"
+    return True
+
+HISTORIQUE = [
+    {"role": "system", "content": "Sois concis."},
+    {"role": "user", "content": "Salut"},
+    {"role": "assistant", "content": "Bonjour !"},
+    {"role": "user", "content": "Explique le RAG"},
+]
+print(compter_tours(HISTORIQUE))
+print(dernier_du_role(HISTORIQUE, "assistant"))
+print(alternance_valide(HISTORIQUE))`,
+              tests: `assert compter_tours(HISTORIQUE) == 2, "2 messages user"
+assert dernier_du_role(HISTORIQUE, "assistant") == "Bonjour !", "Le dernier assistant"
+assert dernier_du_role(HISTORIQUE, "user") == "Explique le RAG", "Le dernier user"
+assert dernier_du_role([], "user") is None, "Historique vide : None"
+assert alternance_valide(HISTORIQUE), "system puis user/assistant/user : valide"
+assert not alternance_valide([{"role": "user", "content": "a"}, {"role": "user", "content": "b"}]), "Deux user d'affilée : invalide"
+assert not alternance_valide([{"role": "assistant", "content": "a"}]), "Commencer par assistant : invalide"
+assert alternance_valide([]), "Historique vide : trivialement valide"
+print("TESTS_PASS")`,
+              hints: [
+                'reversed(messages) parcourt depuis la fin — parfait pour "le dernier".',
+                'alternance : saute le system éventuel, puis bascule la variable attendu à chaque message.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm11l1e3',
+              title: "Défi — Conversation à mémoire bornée",
+              instructions: `La version production de ta classe Conversation : \`ConversationBornee(client, system, max_tours)\` garde au maximum les \`max_tours\` derniers échanges complets (paires user+assistant) dans l'historique envoyé — le message system survit toujours.
+
+Complète \`demander(question)\` : ajoute le user, appelle \`client.chat\`, ajoute la réponse, puis **taille** \`self.messages\` pour ne garder que system + les \`2 × max_tours\` derniers messages.`,
+              starterCode: `class MockLLM:
+    def chat(self, messages, temperature=0.7):
+        n = sum(1 for m in messages if m["role"] == "user")
+        return {"role": "assistant", "content": f"réponse #{n} (contexte : {len(messages)} messages)"}
+
+class ConversationBornee:
+    def __init__(self, client, system, max_tours=2):
+        self.client = client
+        self.max_tours = max_tours
+        self.messages = [{"role": "system", "content": system}]
+
+    def demander(self, question):
+        ...
+
+conv = ConversationBornee(MockLLM(), "Sois utile.", max_tours=2)
+for i in range(4):
+    print(conv.demander(f"question {i}"))
+print(f"taille finale de l'historique : {len(conv.messages)}")`,
+              solution: `class MockLLM:
+    def chat(self, messages, temperature=0.7):
+        n = sum(1 for m in messages if m["role"] == "user")
+        return {"role": "assistant", "content": f"réponse #{n} (contexte : {len(messages)} messages)"}
+
+class ConversationBornee:
+    def __init__(self, client, system, max_tours=2):
+        self.client = client
+        self.max_tours = max_tours
+        self.messages = [{"role": "system", "content": system}]
+
+    def demander(self, question):
+        self.messages.append({"role": "user", "content": question})
+        reponse = self.client.chat(self.messages)
+        self.messages.append(reponse)
+        system = self.messages[0]
+        reste = self.messages[1:]
+        self.messages = [system] + reste[-2 * self.max_tours:]
+        return reponse["content"]
+
+conv = ConversationBornee(MockLLM(), "Sois utile.", max_tours=2)
+for i in range(4):
+    print(conv.demander(f"question {i}"))
+print(f"taille finale de l'historique : {len(conv.messages)}")`,
+              tests: `_c = ConversationBornee(MockLLM(), "Sois utile.", max_tours=2)
+for _i in range(4):
+    _c.demander(f"question {_i}")
+assert len(_c.messages) == 5, "system + 2 tours x 2 messages = 5, quel que soit le nombre de tours passés"
+assert _c.messages[0]["role"] == "system", "Le system survit TOUJOURS"
+assert _c.messages[1]["content"] == "question 2", "Les vieux tours sont partis : le plus ancien restant est la question 2"
+assert _c.messages[-1]["role"] == "assistant", "L'historique se termine par la dernière réponse"
+_c2 = ConversationBornee(MockLLM(), "s", max_tours=5)
+_c2.demander("a")
+assert len(_c2.messages) == 3, "Sous la limite : rien n'est taillé"
+print("TESTS_PASS")`,
+              hints: [
+                'La taille se fait APRÈS avoir ajouté la réponse.',
+                'reste[-2 * self.max_tours:] garde les derniers messages ; [system] + ... recolle la tête.',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -234,6 +371,158 @@ print("TESTS_PASS")`,
                 '.find("{") renvoie -1 si absent — teste-le avant de découper.',
                 'La tranche est reponse[debut:fin + 1] — le +1 pour inclure la dernière accolade.',
                 'try/except json.JSONDecodeError autour de json.loads, return None dans le except.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm11l2e2',
+              title: "Valider un schéma de sortie",
+              instructions: `Le contrôle qu'on branche derrière chaque extraction LLM (c'est le cœur de ce que fait Pydantic) : \`valider_schema(data, schema)\` où \`schema\` est un dict \`champ → type\` (ex : \`{"nom": str, "score": float}\`), renvoie la **liste des erreurs** :
+
+- \`"champ manquant : x"\` pour chaque clé du schéma absente,
+- \`"type invalide : x"\` pour chaque champ présent du mauvais type (utilise \`isinstance\` ; note : un int là où on attend un float est TOLÉRÉ),
+- \`"champ inattendu : x"\` pour chaque clé hors schéma.
+
+Liste vide = donnée valide.`,
+              starterCode: `def valider_schema(data, schema):
+    ...
+
+SCHEMA = {"nom": str, "sentiment": str, "score": float}
+print(valider_schema({"nom": "X", "sentiment": "positif", "score": 0.9}, SCHEMA))
+print(valider_schema({"nom": 42, "score": 0.5, "bonus": True}, SCHEMA))`,
+              solution: `def valider_schema(data, schema):
+    erreurs = []
+    for champ, type_attendu in schema.items():
+        if champ not in data:
+            erreurs.append(f"champ manquant : {champ}")
+        else:
+            valeur = data[champ]
+            ok = isinstance(valeur, type_attendu) or (type_attendu is float and isinstance(valeur, int))
+            if not ok:
+                erreurs.append(f"type invalide : {champ}")
+    for champ in data:
+        if champ not in schema:
+            erreurs.append(f"champ inattendu : {champ}")
+    return erreurs
+
+SCHEMA = {"nom": str, "sentiment": str, "score": float}
+print(valider_schema({"nom": "X", "sentiment": "positif", "score": 0.9}, SCHEMA))
+print(valider_schema({"nom": 42, "score": 0.5, "bonus": True}, SCHEMA))`,
+              tests: `SCHEMA2 = {"nom": str, "sentiment": str, "score": float}
+assert valider_schema({"nom": "X", "sentiment": "positif", "score": 0.9}, SCHEMA2) == [], "Donnée conforme : aucune erreur"
+_e = valider_schema({"nom": 42, "score": 0.5, "bonus": True}, SCHEMA2)
+assert "type invalide : nom" in _e, "42 n'est pas un str"
+assert "champ manquant : sentiment" in _e, "sentiment absent"
+assert "champ inattendu : bonus" in _e, "bonus hors schéma"
+assert len(_e) == 3, "Exactement 3 erreurs"
+assert valider_schema({"nom": "a", "sentiment": "b", "score": 1}, SCHEMA2) == [], "Un int pour un float : toléré (1 est un score valide)"
+print("TESTS_PASS")`,
+              hints: [
+                'Deux boucles : le schéma (manquants + types), puis les données (inattendus).',
+                'La tolérance int→float : un cas particulier explicite dans la condition.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm11l2e3',
+              title: "Défi — Extraction avec réessais",
+              instructions: `En production, si la sortie du LLM est invalide… on redemande (souvent en montrant l'erreur au modèle). Simule ce circuit : \`extraire_valide(candidats, schema)\` reçoit la liste des réponses successives du modèle (des chaînes) et :
+
+1. pour chaque candidat, tente \`extraire_json\` (fourni) puis \`valider_schema\` (fourni),
+2. au premier candidat valide → renvoie \`(donnees, essais_utilises)\`,
+3. si aucun ne passe → renvoie \`(None, len(candidats))\`.`,
+              starterCode: `import json
+
+def extraire_json(reponse):
+    debut, fin = reponse.find("{"), reponse.rfind("}")
+    if debut == -1 or fin == -1:
+        return None
+    try:
+        return json.loads(reponse[debut:fin + 1])
+    except json.JSONDecodeError:
+        return None
+
+def valider_schema(data, schema):
+    erreurs = []
+    for champ, t in schema.items():
+        if champ not in data:
+            erreurs.append(f"champ manquant : {champ}")
+        elif not (isinstance(data[champ], t) or (t is float and isinstance(data[champ], int))):
+            erreurs.append(f"type invalide : {champ}")
+    for champ in data:
+        if champ not in schema:
+            erreurs.append(f"champ inattendu : {champ}")
+    return erreurs
+
+SCHEMA = {"sentiment": str, "score": float}
+
+def extraire_valide(candidats, schema):
+    ...
+
+candidats = [
+    "Je ne peux pas répondre en JSON.",
+    '{"sentiment": "positif"}',
+    'Voici : {"sentiment": "positif", "score": 0.9}',
+]
+print(extraire_valide(candidats, SCHEMA))`,
+              solution: `import json
+
+def extraire_json(reponse):
+    debut, fin = reponse.find("{"), reponse.rfind("}")
+    if debut == -1 or fin == -1:
+        return None
+    try:
+        return json.loads(reponse[debut:fin + 1])
+    except json.JSONDecodeError:
+        return None
+
+def valider_schema(data, schema):
+    erreurs = []
+    for champ, t in schema.items():
+        if champ not in data:
+            erreurs.append(f"champ manquant : {champ}")
+        elif not (isinstance(data[champ], t) or (t is float and isinstance(data[champ], int))):
+            erreurs.append(f"type invalide : {champ}")
+    for champ in data:
+        if champ not in schema:
+            erreurs.append(f"champ inattendu : {champ}")
+    return erreurs
+
+SCHEMA = {"sentiment": str, "score": float}
+
+def extraire_valide(candidats, schema):
+    for essai, candidat in enumerate(candidats, start=1):
+        data = extraire_json(candidat)
+        if data is not None and valider_schema(data, schema) == []:
+            return data, essai
+    return None, len(candidats)
+
+candidats = [
+    "Je ne peux pas répondre en JSON.",
+    '{"sentiment": "positif"}',
+    'Voici : {"sentiment": "positif", "score": 0.9}',
+]
+print(extraire_valide(candidats, SCHEMA))`,
+              tests: `_c = [
+    "Je ne peux pas répondre en JSON.",
+    '{"sentiment": "positif"}',
+    'Voici : {"sentiment": "positif", "score": 0.9}',
+]
+_d, _n = extraire_valide(_c, SCHEMA)
+assert _d == {"sentiment": "positif", "score": 0.9}, "Le 3e candidat est le premier valide"
+assert _n == 3, "3 essais utilisés"
+_d2, _n2 = extraire_valide(['{"sentiment": "ok", "score": 1.0}'], SCHEMA)
+assert _d2 is not None and _n2 == 1, "Premier coup gagnant"
+_d3, _n3 = extraire_valide(["rien", "toujours rien"], SCHEMA)
+assert _d3 is None and _n3 == 2, "Aucun valide : (None, nb de candidats)"
+print("TESTS_PASS")`,
+              hints: [
+                'enumerate(candidats, start=1) numérote les essais.',
+                'Deux conditions pour gagner : JSON extrait ET schéma sans erreurs.',
               ],
             },
           },
@@ -367,6 +656,119 @@ print("TESTS_PASS")`,
                 'tronquer : pars de la FIN (reversed), accumule tant que ça tient, puis remets à l\'endroit avec [::-1].',
                 'Initialise le total avec les tokens du system : il fait partie du budget.',
                 'Le break s\'arrête au premier message qui ne tient pas — on ne "saute" pas pour prendre un plus vieux.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm11l3e2',
+              title: "Projeter la facture mensuelle",
+              instructions: `Le calcul qui rend le coût quadratique tangible : \`cout_conversation(nb_tours, tokens_par_message, prix_entree, prix_sortie)\` :
+
+- au tour t (1..nb_tours), l'entrée contient \`2t - 1\` messages (les t questions + les t-1 réponses), chacun de \`tokens_par_message\` tokens,
+- chaque tour produit une sortie de \`tokens_par_message\` tokens,
+- renvoie le coût total.
+
+Puis \`cout_mensuel(nb_conversations, nb_tours, tokens_par_message, prix_entree, prix_sortie)\` — multiplication simple, arrondie à 2 décimales.`,
+              starterCode: `def cout_conversation(nb_tours, tokens_par_message, prix_entree, prix_sortie):
+    ...
+
+def cout_mensuel(nb_conversations, nb_tours, tokens_par_message, prix_entree, prix_sortie):
+    ...
+
+# 10 000 conversations de 10 tours, messages de 200 tokens
+# prix : 3 €/Mtok entrée, 15 €/Mtok sortie
+print(cout_mensuel(10000, 10, 200, 3e-6, 15e-6), "€ par mois")`,
+              solution: `def cout_conversation(nb_tours, tokens_par_message, prix_entree, prix_sortie):
+    total = 0.0
+    for t in range(1, nb_tours + 1):
+        tokens_entree = (2 * t - 1) * tokens_par_message
+        total += tokens_entree * prix_entree + tokens_par_message * prix_sortie
+    return total
+
+def cout_mensuel(nb_conversations, nb_tours, tokens_par_message, prix_entree, prix_sortie):
+    return round(nb_conversations * cout_conversation(nb_tours, tokens_par_message, prix_entree, prix_sortie), 2)
+
+print(cout_mensuel(10000, 10, 200, 3e-6, 15e-6), "€ par mois")`,
+              tests: `_c1 = cout_conversation(1, 100, 1e-6, 2e-6)
+assert abs(_c1 - (100 * 1e-6 + 100 * 2e-6)) < 1e-12, "1 tour : 1 message d'entrée + 1 sortie"
+_c2 = cout_conversation(2, 100, 1e-6, 0.0)
+assert abs(_c2 - (100 + 300) * 1e-6) < 1e-12, "Tour 2 : 3 messages d'entrée (2 questions + 1 réponse)"
+_c10 = cout_conversation(10, 100, 1e-6, 0.0)
+_c20 = cout_conversation(20, 100, 1e-6, 0.0)
+assert _c20 > 3.5 * _c10, "Doubler les tours fait bien PLUS que doubler le coût d'entrée : le quadratique"
+assert cout_mensuel(10, 1, 100, 1e-6, 2e-6) == round(10 * _c1, 2), "Multiplication et arrondi"
+print("TESTS_PASS")`,
+              hints: [
+                'Au tour t : 2t-1 messages dans l\'entrée. Somme sur t de 1 à nb_tours.',
+                'Vérifie sur le test "quadratique" : la somme des 2t-1 vaut t² — c\'est LA démonstration.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm11l3e3',
+              title: "Défi — Compression d'historique par résumé",
+              instructions: `La stratégie la plus élégante contre le coût quadratique : résumer les vieux tours. Écris \`compresser(messages, seuil_tokens, resumeur)\` :
+
+1. estime le total (\`len(content) // 4\` par message) ; si ≤ seuil, renvoie les messages tels quels,
+2. sinon : garde le message system (index 0) et les **4 derniers** messages ; tous les messages intermédiaires sont remplacés par UN message \`{"role": "system", "content": "Résumé de la conversation : " + resumeur(textes)}\` inséré juste après le system (où \`textes\` est la liste de leurs contents),
+3. renvoie le nouvel historique.`,
+              starterCode: `def resumeur_mock(textes):
+    return f"{len(textes)} messages échangés sur le projet."
+
+def estimer(messages):
+    return sum(len(m["content"]) // 4 for m in messages)
+
+def compresser(messages, seuil_tokens, resumeur):
+    ...
+
+MESSAGES = [{"role": "system", "content": "Sois concis."}] + [
+    {"role": "user" if i % 2 == 0 else "assistant", "content": "x" * 200}
+    for i in range(8)
+]
+court = compresser(MESSAGES, seuil_tokens=100, resumeur=resumeur_mock)
+for m in court:
+    print(m["role"], ":", m["content"][:50])`,
+              solution: `def resumeur_mock(textes):
+    return f"{len(textes)} messages échangés sur le projet."
+
+def estimer(messages):
+    return sum(len(m["content"]) // 4 for m in messages)
+
+def compresser(messages, seuil_tokens, resumeur):
+    if estimer(messages) <= seuil_tokens:
+        return messages
+    system = messages[0]
+    recents = messages[-4:]
+    intermediaires = messages[1:-4]
+    if not intermediaires:
+        return messages
+    resume = {"role": "system",
+              "content": "Résumé de la conversation : " + resumeur([m["content"] for m in intermediaires])}
+    return [system, resume] + recents
+
+MESSAGES = [{"role": "system", "content": "Sois concis."}] + [
+    {"role": "user" if i % 2 == 0 else "assistant", "content": "x" * 200}
+    for i in range(8)
+]
+court = compresser(MESSAGES, seuil_tokens=100, resumeur=resumeur_mock)
+for m in court:
+    print(m["role"], ":", m["content"][:50])`,
+              tests: `_court = compresser(MESSAGES, 100, resumeur_mock)
+assert len(_court) == 6, "system + résumé + 4 récents = 6 messages"
+assert _court[0]["content"] == "Sois concis.", "Le system d'origine en tête"
+assert _court[1]["content"].startswith("Résumé de la conversation : 4 messages"), "4 messages intermédiaires résumés"
+assert _court[2:] == MESSAGES[-4:], "Les 4 derniers messages, intacts"
+_intact = compresser(MESSAGES, 100000, resumeur_mock)
+assert _intact == MESSAGES, "Sous le seuil : aucun changement"
+assert estimer(_court) < estimer(MESSAGES), "La compression réduit bien les tokens"
+print("TESTS_PASS")`,
+              hints: [
+                'Trois tranches : messages[0], messages[1:-4], messages[-4:].',
+                'Le cas "pas assez de messages intermédiaires" évite un résumé vide.',
               ],
             },
           },

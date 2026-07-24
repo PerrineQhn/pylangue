@@ -89,6 +89,121 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm12l1e2',
+              title: "Chunking par paragraphes",
+              instructions: `La version « structurelle » du chunking, celle qu'on préfère en production quand les documents ont des paragraphes : \`decouper_paragraphes(texte, max_mots)\` :
+
+1. découpe sur les doubles sauts de ligne (\`texte.split("\\n\\n")\`), en ignorant les paragraphes vides (après strip),
+2. regroupe les paragraphes consécutifs tant que le chunk courant reste ≤ \`max_mots\` mots,
+3. un paragraphe qui dépasse à lui seul \`max_mots\` forme son propre chunk,
+4. les paragraphes d'un même chunk sont rejoints par \`"\\n\\n"\`.`,
+              starterCode: `def decouper_paragraphes(texte, max_mots):
+    ...
+
+DOC = "Premier paragraphe court.\\n\\nDeuxième paragraphe court aussi.\\n\\nTroisième un peu plus long que les autres ici.\\n\\nQuatrième."
+for c in decouper_paragraphes(DOC, max_mots=8):
+    print(repr(c))`,
+              solution: `def decouper_paragraphes(texte, max_mots):
+    paragraphes = [p.strip() for p in texte.split("\\n\\n") if p.strip()]
+    chunks = []
+    courant = []
+    nb_mots = 0
+    for p in paragraphes:
+        mots_p = len(p.split())
+        if courant and nb_mots + mots_p > max_mots:
+            chunks.append("\\n\\n".join(courant))
+            courant, nb_mots = [], 0
+        courant.append(p)
+        nb_mots += mots_p
+    if courant:
+        chunks.append("\\n\\n".join(courant))
+    return chunks
+
+DOC = "Premier paragraphe court.\\n\\nDeuxième paragraphe court aussi.\\n\\nTroisième un peu plus long que les autres ici.\\n\\nQuatrième."
+for c in decouper_paragraphes(DOC, max_mots=8):
+    print(repr(c))`,
+              tests: `_c = decouper_paragraphes("Un deux trois.\\n\\nQuatre cinq.\\n\\nSix sept huit neuf dix onze.", max_mots=5)
+assert _c[0] == "Un deux trois.\\n\\nQuatre cinq.", "Les deux premiers paragraphes tiennent ensemble (5 mots)"
+assert _c[1] == "Six sept huit neuf dix onze.", "Le troisième forme son propre chunk"
+_c2 = decouper_paragraphes("a b c d e f g h", max_mots=3)
+assert _c2 == ["a b c d e f g h"], "Un paragraphe trop long à lui seul reste entier (chunk unique)"
+_c3 = decouper_paragraphes("Un.\\n\\n\\n\\nDeux.", max_mots=10)
+assert _c3 == ["Un.\\n\\nDeux."], "Les paragraphes vides sont ignorés"
+assert decouper_paragraphes("", 10) == [], "Texte vide"
+print("TESTS_PASS")`,
+              hints: [
+                'Accumule dans une liste "courant" avec un compteur de mots ; vide-la quand le prochain paragraphe ferait déborder.',
+                'Le test "if courant" avant de fermer évite un chunk vide en tête.',
+                'N\'oublie pas le dernier chunk après la boucle.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm12l1e3',
+              title: "Défi — Chunks avec métadonnées de source",
+              instructions: `Sans métadonnées, impossible de citer ses sources. Écris \`indexer(documents, taille, overlap)\` où \`documents\` est un dict \`nom → texte\`, en réutilisant \`decouper\` (fourni). Renvoie la liste de dicts :
+
+\`\`\`
+{"source": nom, "position": i, "texte": chunk}
+\`\`\`
+
+Les documents sont traités dans l'ordre **alphabétique** des noms (reproductibilité !), et \`position\` numérote les chunks au sein de chaque document (0, 1, 2…).`,
+              starterCode: `def decouper(texte, taille, overlap):
+    mots = texte.split()
+    pas = taille - overlap
+    chunks = []
+    for debut in range(0, len(mots), pas):
+        chunks.append(" ".join(mots[debut:debut + taille]))
+        if debut + taille >= len(mots):
+            break
+    return chunks
+
+def indexer(documents, taille, overlap):
+    ...
+
+DOCS = {"guide.md": "a b c d e f", "faq.md": "un deux trois"}
+for c in indexer(DOCS, taille=4, overlap=1):
+    print(c)`,
+              solution: `def decouper(texte, taille, overlap):
+    mots = texte.split()
+    pas = taille - overlap
+    chunks = []
+    for debut in range(0, len(mots), pas):
+        chunks.append(" ".join(mots[debut:debut + taille]))
+        if debut + taille >= len(mots):
+            break
+    return chunks
+
+def indexer(documents, taille, overlap):
+    index = []
+    for nom in sorted(documents):
+        for i, chunk in enumerate(decouper(documents[nom], taille, overlap)):
+            index.append({"source": nom, "position": i, "texte": chunk})
+    return index
+
+DOCS = {"guide.md": "a b c d e f", "faq.md": "un deux trois"}
+for c in indexer(DOCS, taille=4, overlap=1):
+    print(c)`,
+              tests: `_i = indexer({"guide.md": "a b c d e f", "faq.md": "un deux trois"}, 4, 1)
+assert _i[0]["source"] == "faq.md", "Ordre alphabétique : faq.md d'abord"
+assert _i[0] == {"source": "faq.md", "position": 0, "texte": "un deux trois"}, "Chunk complet avec métadonnées"
+_guide = [c for c in _i if c["source"] == "guide.md"]
+assert len(_guide) == 2, "guide.md : 2 chunks (taille 4, overlap 1)"
+assert _guide[1]["position"] == 1, "Numérotation par document"
+assert _guide[1]["texte"] == "d e f", "Le second chunk chevauche d'un mot"
+assert indexer({}, 4, 1) == [], "Aucun document"
+print("TESTS_PASS")`,
+              hints: [
+                'sorted(documents) itère les clés dans l\'ordre alphabétique.',
+                'enumerate sur les chunks de chaque document pour la position.',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -251,6 +366,105 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm12l2e2',
+              title: "Seuil de pertinence : mieux vaut rien que du bruit",
+              instructions: `Le top-k naïf a un défaut : si RIEN n'est pertinent, il injecte quand même k chunks hors sujet — et le modèle brode dessus. Écris \`retenir(scores, seuil, k)\` (scores = liste de floats, un par chunk) qui renvoie les indices :
+
+1. dont le score est **strictement supérieur** au seuil,
+2. triés par score décroissant,
+3. limités à k.
+
+Une liste vide est un résultat légitime — c'est elle qui déclenchera la réponse « je n'ai pas trouvé » plutôt qu'une hallucination.`,
+              starterCode: `def retenir(scores, seuil, k):
+    ...
+
+print(retenir([0.1, 0.85, 0.4, 0.92, 0.05], seuil=0.3, k=2))
+print(retenir([0.1, 0.05, 0.2], seuil=0.3, k=2))`,
+              solution: `def retenir(scores, seuil, k):
+    candidats = [(i, s) for i, s in enumerate(scores) if s > seuil]
+    candidats.sort(key=lambda p: -p[1])
+    return [i for i, _ in candidats[:k]]
+
+print(retenir([0.1, 0.85, 0.4, 0.92, 0.05], seuil=0.3, k=2))
+print(retenir([0.1, 0.05, 0.2], seuil=0.3, k=2))`,
+              tests: `assert retenir([0.1, 0.85, 0.4, 0.92, 0.05], 0.3, 2) == [3, 1], "Les 2 meilleurs au-dessus du seuil, triés"
+assert retenir([0.1, 0.05, 0.2], 0.3, 2) == [], "Rien au-dessus du seuil : liste vide — pas de bruit injecté !"
+assert retenir([0.5, 0.6], 0.3, 5) == [1, 0], "k plus grand que les candidats : tous"
+assert retenir([0.3], 0.3, 1) == [], "Seuil STRICTEMENT supérieur"
+assert retenir([], 0.3, 2) == [], "Aucun chunk"
+print("TESTS_PASS")`,
+              hints: [
+                'enumerate pour garder les indices, filtre, tri par -score, troncature.',
+                'Le > strict (pas >=) : un score égal au seuil est écarté.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm12l2e3',
+              title: "Défi — Prompt sous budget de tokens",
+              instructions: `Ton contexte n'est pas infini, et chaque token injecté coûte. Écris \`construire_prompt_budget(question, chunks, indices, budget)\` — la version budgétée de ton assembleur :
+
+1. parcours les indices **dans l'ordre fourni** (du plus pertinent au moins),
+2. inclus chaque chunk si le total estimé (\`len(texte) // 4\`) des chunks inclus reste ≤ budget — mais inclus TOUJOURS le premier, même s'il dépasse (mieux vaut un contexte trop long qu'aucun contexte),
+3. les suivants qui ne tiennent pas sont sautés (on continue d'essayer les suivants, plus courts peut-être),
+4. assemble le prompt au format habituel (consigne, passages [n], question) et renvoie \`(prompt, indices_inclus)\`.`,
+              starterCode: `def estimer(texte):
+    return len(texte) // 4
+
+def construire_prompt_budget(question, chunks, indices, budget):
+    ...
+
+CHUNKS = ["a" * 400, "b" * 100, "c" * 100, "d" * 800]
+prompt, inclus = construire_prompt_budget("Quoi ?", CHUNKS, [0, 3, 1, 2], budget=150)
+print("inclus :", inclus)
+print(prompt[:120])`,
+              solution: `def estimer(texte):
+    return len(texte) // 4
+
+def construire_prompt_budget(question, chunks, indices, budget):
+    inclus = []
+    total = 0
+    for i in indices:
+        cout = estimer(chunks[i])
+        if not inclus:
+            inclus.append(i)
+            total += cout
+        elif total + cout <= budget:
+            inclus.append(i)
+            total += cout
+    lignes = ["Réponds uniquement à partir des passages suivants. Cite tes sources au format [n].", ""]
+    for n, i in enumerate(inclus, start=1):
+        lignes.append(f"[{n}] {chunks[i]}")
+    lignes.append("")
+    lignes.append(f"Question : {question}")
+    return "\\n".join(lignes), inclus
+
+CHUNKS = ["a" * 400, "b" * 100, "c" * 100, "d" * 800]
+prompt, inclus = construire_prompt_budget("Quoi ?", CHUNKS, [0, 3, 1, 2], budget=150)
+print("inclus :", inclus)
+print(prompt[:120])`,
+              tests: `_chunks = ["a" * 400, "b" * 100, "c" * 100, "d" * 800]
+_p, _inc = construire_prompt_budget("Quoi ?", _chunks, [0, 3, 1, 2], budget=150)
+assert _inc[0] == 0, "Le premier indice est TOUJOURS inclus (100 tokens)"
+assert 3 not in _inc, "Le chunk de 200 tokens ferait exploser le budget : sauté"
+assert 1 in _inc and 2 in _inc, "Les deux petits (25 chacun) tiennent : 100+25+25 = 150"
+assert "[3]" in _p and "[4]" not in _p, "3 passages numérotés dans le prompt"
+_p2, _inc2 = construire_prompt_budget("Q", ["x" * 4000], [0], budget=10)
+assert _inc2 == [0], "Même énorme, le premier chunk passe toujours"
+assert _p2.endswith("Question : Q"), "Le format se termine par la question"
+print("TESTS_PASS")`,
+              hints: [
+                'Le premier chunk a un traitement spécial (toujours inclus) ; les suivants passent le test de budget.',
+                'On SAUTE sans break : un chunk plus court peut encore tenir après un refus.',
+                'La numérotation [n] suit l\'ordre d\'inclusion, pas les indices d\'origine.',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -374,6 +588,140 @@ print("TESTS_PASS")`,
                 're.findall(r"\\[(\\d+)\\]", reponse) capture les numéros ; convertis avec int().',
                 'citations_valides : deux conditions — non vide, ET all(1 <= c <= n_passages).',
                 'score_ancrage : deux sets de mots en minuscules, intersection avec &, attention au cas du set vide.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm12l3e2',
+              title: "Couverture : chaque phrase a-t-elle sa source ?",
+              instructions: `Un contrôle mécanique de plus : \`phrases_sans_citation(reponse)\` découpe la réponse en phrases (sur \`". "\` après avoir retiré le point final) et renvoie la liste des phrases **affirmatives sans citation** \`[n]\` (utilise \`re.search(r"\\[\\d+\\]", phrase)\`).
+
+Une réponse bien élevée n'en a aucune ; chaque phrase orpheline est un endroit où l'hallucination peut se nicher.`,
+              starterCode: `import re
+
+def phrases_sans_citation(reponse):
+    ...
+
+r = "Le RAG combine recherche et génération [1]. Il a été inventé récemment. Il réduit les erreurs [2]."
+print(phrases_sans_citation(r))`,
+              solution: `import re
+
+def phrases_sans_citation(reponse):
+    texte = reponse.strip()
+    if texte.endswith("."):
+        texte = texte[:-1]
+    phrases = [p.strip() for p in texte.split(". ") if p.strip()]
+    return [p for p in phrases if not re.search(r"\\[\\d+\\]", p)]
+
+r = "Le RAG combine recherche et génération [1]. Il a été inventé récemment. Il réduit les erreurs [2]."
+print(phrases_sans_citation(r))`,
+              tests: `_r = phrases_sans_citation("Le RAG combine recherche et génération [1]. Il a été inventé récemment. Il réduit les erreurs [2].")
+assert _r == ["Il a été inventé récemment"], "Une seule phrase orpheline"
+assert phrases_sans_citation("Tout est sourcé [1]. Vraiment [2].") == [], "Réponse parfaitement citée"
+_r2 = phrases_sans_citation("Aucune source ici. Ni là.")
+assert len(_r2) == 2, "Deux phrases sans citation"
+assert phrases_sans_citation("") == [], "Réponse vide"
+print("TESTS_PASS")`,
+              hints: [
+                'Retire le point final avant le split sur ". " — sinon la dernière phrase garde son point.',
+                're.search(r"\\[\\d+\\]", phrase) détecte une citation n\'importe où dans la phrase.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm12l3e3',
+              title: "Défi — Le rapport de fidélité complet",
+              instructions: `Assemble la couche de contrôle de ton RAG : \`rapport_fidelite(reponse, chunks)\` renvoie un dict :
+
+- \`"citations_valides"\` : bool — au moins une citation, toutes entre 1 et len(chunks) (fonctions fournies),
+- \`"phrases_orphelines"\` : le nombre de phrases sans citation (fonction fournie),
+- \`"ancrage_moyen"\` : la moyenne des scores d'ancrage (fourni) de chaque phrase CITÉE avec le chunk qu'elle cite (première citation de la phrase), arrondie à 2 décimales — \`1.0\` s'il n'y a aucune phrase citée,
+- \`"verdict"\` : \`"ok"\` si citations valides ET zéro orpheline ET ancrage ≥ 0.5, sinon \`"a_verifier"\`.`,
+              starterCode: `import re
+
+def extraire_citations(texte):
+    return [int(n) for n in re.findall(r"\\[(\\d+)\\]", texte)]
+
+def score_ancrage(phrase, passage):
+    mots = {m for m in phrase.lower().split() if len(m) > 3}
+    if not mots:
+        return 1.0
+    return len(mots & set(passage.lower().split())) / len(mots)
+
+def decouper_phrases(reponse):
+    texte = reponse.strip()
+    if texte.endswith("."):
+        texte = texte[:-1]
+    return [p.strip() for p in texte.split(". ") if p.strip()]
+
+def rapport_fidelite(reponse, chunks):
+    ...
+
+CHUNKS = ["Le RAG combine la recherche documentaire et la génération.",
+          "Les erreurs diminuent avec des sources fiables."]
+r = "Le RAG combine recherche et génération [1]. Les erreurs diminuent avec des sources [2]."
+print(rapport_fidelite(r, CHUNKS))`,
+              solution: `import re
+
+def extraire_citations(texte):
+    return [int(n) for n in re.findall(r"\\[(\\d+)\\]", texte)]
+
+def score_ancrage(phrase, passage):
+    mots = {m for m in phrase.lower().split() if len(m) > 3}
+    if not mots:
+        return 1.0
+    return len(mots & set(passage.lower().split())) / len(mots)
+
+def decouper_phrases(reponse):
+    texte = reponse.strip()
+    if texte.endswith("."):
+        texte = texte[:-1]
+    return [p.strip() for p in texte.split(". ") if p.strip()]
+
+def rapport_fidelite(reponse, chunks):
+    citations = extraire_citations(reponse)
+    valides = bool(citations) and all(1 <= c <= len(chunks) for c in citations)
+    phrases = decouper_phrases(reponse)
+    orphelines = 0
+    ancrages = []
+    for p in phrases:
+        cit = extraire_citations(p)
+        if not cit:
+            orphelines += 1
+        elif 1 <= cit[0] <= len(chunks):
+            phrase_nue = re.sub(r"\\[\\d+\\]", "", p)
+            ancrages.append(score_ancrage(phrase_nue, chunks[cit[0] - 1]))
+    ancrage = round(sum(ancrages) / len(ancrages), 2) if ancrages else 1.0
+    verdict = "ok" if valides and orphelines == 0 and ancrage >= 0.5 else "a_verifier"
+    return {"citations_valides": valides, "phrases_orphelines": orphelines,
+            "ancrage_moyen": ancrage, "verdict": verdict}
+
+CHUNKS = ["Le RAG combine la recherche documentaire et la génération.",
+          "Les erreurs diminuent avec des sources fiables."]
+r = "Le RAG combine recherche et génération [1]. Les erreurs diminuent avec des sources [2]."
+print(rapport_fidelite(r, CHUNKS))`,
+              tests: `_chunks = ["Le RAG combine la recherche documentaire et la génération.",
+           "Les erreurs diminuent avec des sources fiables."]
+_ok = rapport_fidelite("Le RAG combine recherche et génération [1]. Les erreurs diminuent avec des sources [2].", _chunks)
+assert _ok["citations_valides"] and _ok["phrases_orphelines"] == 0, "Réponse bien construite"
+assert _ok["ancrage_moyen"] >= 0.8, "Les phrases collent à leurs sources"
+assert _ok["verdict"] == "ok", "Verdict positif"
+_hallu = rapport_fidelite("Les licornes programment en COBOL [1].", _chunks)
+assert _hallu["verdict"] == "a_verifier", "Citation valide mais contenu sans ancrage : signalé"
+assert _hallu["ancrage_moyen"] < 0.5, "L'ancrage démasque l'hallucination"
+_orph = rapport_fidelite("Le RAG combine recherche et génération [1]. Et il fait le café.", _chunks)
+assert _orph["phrases_orphelines"] == 1 and _orph["verdict"] == "a_verifier", "Phrase orpheline : à vérifier"
+_faux = rapport_fidelite("Vrai selon [7].", _chunks)
+assert not _faux["citations_valides"], "Citation [7] avec 2 chunks : invalide"
+print("TESTS_PASS")`,
+              hints: [
+                'Traite chaque phrase : citée -> ancrage avec chunks[premiere_citation - 1] ; sinon orpheline.',
+                'Retire les [n] de la phrase avant le score d\'ancrage (re.sub).',
+                'Le verdict combine les trois signaux — un seul rouge suffit à demander vérification.',
               ],
             },
           },

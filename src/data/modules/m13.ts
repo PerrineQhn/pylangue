@@ -125,6 +125,174 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm13l1e2',
+              title: "Valider les décisions de l'agent",
+              instructions: `Ne JAMAIS exécuter une décision de LLM sans la valider — c'est la frontière de sécurité. Écris \`valider_decision(decision, outils)\` qui renvoie \`(True, "")\` ou \`(False, raison)\` :
+
+- \`"type manquant"\` si la clé \`type\` est absente,
+- \`"type inconnu : X"\` si le type n'est ni \`"reponse"\` ni \`"outil"\`,
+- pour un outil : \`"outil inconnu : X"\` si le nom n'est pas dans le dict \`outils\`, \`"args invalides"\` si \`args\` absent ou pas un dict,
+- pour une réponse : \`"contenu manquant"\` si \`contenu\` absent.`,
+              starterCode: `OUTILS = {"calculatrice": None, "recherche": None}
+
+def valider_decision(decision, outils):
+    ...
+
+print(valider_decision({"type": "outil", "nom": "calculatrice", "args": {"expression": "1+1"}}, OUTILS))
+print(valider_decision({"type": "outil", "nom": "rm_rf", "args": {}}, OUTILS))
+print(valider_decision({"type": "poeme"}, OUTILS))`,
+              solution: `OUTILS = {"calculatrice": None, "recherche": None}
+
+def valider_decision(decision, outils):
+    if "type" not in decision:
+        return False, "type manquant"
+    t = decision["type"]
+    if t not in ("reponse", "outil"):
+        return False, f"type inconnu : {t}"
+    if t == "outil":
+        nom = decision.get("nom")
+        if nom not in outils:
+            return False, f"outil inconnu : {nom}"
+        if not isinstance(decision.get("args"), dict):
+            return False, "args invalides"
+    else:
+        if "contenu" not in decision:
+            return False, "contenu manquant"
+    return True, ""
+
+print(valider_decision({"type": "outil", "nom": "calculatrice", "args": {"expression": "1+1"}}, OUTILS))
+print(valider_decision({"type": "outil", "nom": "rm_rf", "args": {}}, OUTILS))
+print(valider_decision({"type": "poeme"}, OUTILS))`,
+              tests: `assert valider_decision({"type": "outil", "nom": "calculatrice", "args": {}}, OUTILS) == (True, ""), "Outil connu, args dict : valide"
+assert valider_decision({"type": "reponse", "contenu": "ok"}, OUTILS) == (True, ""), "Réponse avec contenu : valide"
+assert valider_decision({}, OUTILS) == (False, "type manquant"), "Dict vide"
+assert valider_decision({"type": "poeme"}, OUTILS) == (False, "type inconnu : poeme"), "Type fantaisiste"
+assert valider_decision({"type": "outil", "nom": "rm_rf", "args": {}}, OUTILS) == (False, "outil inconnu : rm_rf"), "Outil hors liste blanche : REFUSÉ"
+assert valider_decision({"type": "outil", "nom": "recherche", "args": "oups"}, OUTILS) == (False, "args invalides"), "args doit être un dict"
+assert valider_decision({"type": "reponse"}, OUTILS) == (False, "contenu manquant"), "Réponse sans contenu"
+print("TESTS_PASS")`,
+              hints: [
+                'Une cascade de vérifications, du plus général au plus spécifique, avec return anticipé.',
+                'isinstance(decision.get("args"), dict) couvre à la fois absent et mauvais type.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm13l1e3',
+              title: "Défi — L'agent blindé, avec journal",
+              instructions: `La version production de ta boucle : \`executer_agent_securise(llm, question, outils, max_tours)\` combine tout :
+
+1. valide chaque décision (\`valider_decision\` fournie) — décision invalide : ajoute \`"decision invalide : <raison>"\` au journal et renvoie ce message au LLM comme résultat d'outil (role \`outil\`) pour qu'il se corrige,
+2. décision valide type outil : exécute, journalise \`"outil : <nom>"\`, ajoute le résultat à l'historique,
+3. type réponse : journalise \`"reponse"\` et renvoie \`(contenu, journal)\`,
+4. budget épuisé : renvoie \`("[budget épuisé]", journal)\`.`,
+              starterCode: `def valider_decision(decision, outils):
+    if "type" not in decision:
+        return False, "type manquant"
+    t = decision["type"]
+    if t not in ("reponse", "outil"):
+        return False, f"type inconnu : {t}"
+    if t == "outil":
+        if decision.get("nom") not in outils:
+            return False, f"outil inconnu : {decision.get('nom')}"
+        if not isinstance(decision.get("args"), dict):
+            return False, "args invalides"
+    elif "contenu" not in decision:
+        return False, "contenu manquant"
+    return True, ""
+
+OUTILS = {"calculatrice": lambda args: str(eval(args["expression"], {"__builtins__": {}}, {}))}
+
+class MockCapricieux:
+    # Demande un outil INTERDIT, puis se corrige, puis répond.
+    def __init__(self):
+        self.etape = 0
+    def decider(self, messages):
+        self.etape += 1
+        if self.etape == 1:
+            return {"type": "outil", "nom": "acces_disque", "args": {}}
+        if self.etape == 2:
+            return {"type": "outil", "nom": "calculatrice", "args": {"expression": "6*7"}}
+        return {"type": "reponse", "contenu": f"Résultat : {messages[-1]['content']}"}
+
+def executer_agent_securise(llm, question, outils, max_tours=5):
+    ...
+
+reponse, journal = executer_agent_securise(MockCapricieux(), "Combien font 6x7 ?", OUTILS)
+print(reponse)
+print(journal)`,
+              solution: `def valider_decision(decision, outils):
+    if "type" not in decision:
+        return False, "type manquant"
+    t = decision["type"]
+    if t not in ("reponse", "outil"):
+        return False, f"type inconnu : {t}"
+    if t == "outil":
+        if decision.get("nom") not in outils:
+            return False, f"outil inconnu : {decision.get('nom')}"
+        if not isinstance(decision.get("args"), dict):
+            return False, "args invalides"
+    elif "contenu" not in decision:
+        return False, "contenu manquant"
+    return True, ""
+
+OUTILS = {"calculatrice": lambda args: str(eval(args["expression"], {"__builtins__": {}}, {}))}
+
+class MockCapricieux:
+    def __init__(self):
+        self.etape = 0
+    def decider(self, messages):
+        self.etape += 1
+        if self.etape == 1:
+            return {"type": "outil", "nom": "acces_disque", "args": {}}
+        if self.etape == 2:
+            return {"type": "outil", "nom": "calculatrice", "args": {"expression": "6*7"}}
+        return {"type": "reponse", "contenu": f"Résultat : {messages[-1]['content']}"}
+
+def executer_agent_securise(llm, question, outils, max_tours=5):
+    messages = [{"role": "user", "content": question}]
+    journal = []
+    for _ in range(max_tours):
+        decision = llm.decider(messages)
+        ok, raison = valider_decision(decision, outils)
+        if not ok:
+            journal.append(f"decision invalide : {raison}")
+            messages.append({"role": "outil", "content": f"decision invalide : {raison}"})
+            continue
+        if decision["type"] == "reponse":
+            journal.append("reponse")
+            return decision["contenu"], journal
+        resultat = outils[decision["nom"]](decision["args"])
+        journal.append(f"outil : {decision['nom']}")
+        messages.append({"role": "assistant", "content": str(decision)})
+        messages.append({"role": "outil", "content": resultat})
+    return "[budget épuisé]", journal
+
+reponse, journal = executer_agent_securise(MockCapricieux(), "Combien font 6x7 ?", OUTILS)
+print(reponse)
+print(journal)`,
+              tests: `_r, _j = executer_agent_securise(MockCapricieux(), "Combien font 6x7 ?", OUTILS)
+assert _r == "Résultat : 42", "L'agent aboutit malgré le faux départ"
+assert _j == ["decision invalide : outil inconnu : acces_disque", "outil : calculatrice", "reponse"], "Le journal raconte toute l'histoire"
+
+class _Fou:
+    def decider(self, messages):
+        return {"type": "outil", "nom": "acces_disque", "args": {}}
+_r2, _j2 = executer_agent_securise(_Fou(), "?", OUTILS, max_tours=3)
+assert _r2 == "[budget épuisé]", "Un agent qui insiste sur l'interdit est arrêté par le budget"
+assert len(_j2) == 3 and all("invalide" in e for e in _j2), "3 refus journalisés"
+print("TESTS_PASS")`,
+              hints: [
+                'La décision invalide ne consomme pas d\'outil : on renvoie la raison AU MODÈLE (message role outil) et on continue la boucle.',
+                'Le journal est une simple liste de chaînes, appendée à chaque événement.',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -279,6 +447,145 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm13l2e2',
+              title: "L'inclusion : plus souple que l'exact match",
+              instructions: `L'exact match est trop strict pour les réponses en langage naturel : « La capitale est Paris » doit compter juste si l'attendu est « paris ». Écris :
+
+1. \`inclusion(prediction, attendu)\` — \`True\` si l'attendu normalisé est **contenu dans** la prédiction normalisée (\`normaliser\` fournie),
+2. \`inclusion_multiple(prediction, attendus)\` — \`True\` si AU MOINS UN des attendus (liste de variantes acceptables) est inclus.
+
+C'est la métrique des benchmarks de QA (SQuAD et compagnie) — et son défaut est aussi à connaître : « la réponse n'est PAS paris » contient « paris »…`,
+              starterCode: `import re
+
+def normaliser(texte):
+    texte = texte.lower()
+    texte = re.sub(r"[.,!?]", "", texte)
+    return re.sub(r"\s+", " ", texte).strip()
+
+def inclusion(prediction, attendu):
+    ...
+
+def inclusion_multiple(prediction, attendus):
+    ...
+
+print(inclusion("La capitale est Paris.", "paris"))
+print(inclusion_multiple("Il s'agit de l'Hexagone", ["france", "hexagone"]))`,
+              solution: `import re
+
+def normaliser(texte):
+    texte = texte.lower()
+    texte = re.sub(r"[.,!?]", "", texte)
+    return re.sub(r"\s+", " ", texte).strip()
+
+def inclusion(prediction, attendu):
+    return normaliser(attendu) in normaliser(prediction)
+
+def inclusion_multiple(prediction, attendus):
+    return any(inclusion(prediction, a) for a in attendus)
+
+print(inclusion("La capitale est Paris.", "paris"))
+print(inclusion_multiple("Il s'agit de l'Hexagone", ["france", "hexagone"]))`,
+              tests: `assert inclusion("La capitale est Paris.", "paris"), "Ponctuation et casse ignorées"
+assert not inclusion("La capitale est Lyon", "paris"), "Mauvaise réponse"
+assert inclusion("PARIS", "Paris."), "Normalisation des deux côtés"
+assert inclusion_multiple("Il s'agit de l'Hexagone", ["france", "hexagone"]), "Une variante suffit"
+assert not inclusion_multiple("Aucune idée", ["france", "hexagone"]), "Aucune variante"
+assert inclusion("la réponse n'est pas paris", "paris"), "LE défaut connu de l'inclusion : les négations passent — d'où le LLM-juge pour les cas fins"
+print("TESTS_PASS")`,
+              hints: [
+                'normaliser les DEUX chaînes, puis l\'opérateur in.',
+                'any(...) sur les variantes pour la version multiple.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm13l2e3',
+              title: "Défi — Comparer deux prompts en A/B",
+              instructions: `LA question qu'on te posera chaque semaine : « le nouveau prompt est-il meilleur ? ». Écris \`comparer_ab(systeme_a, systeme_b, jeu, metrique)\` qui renvoie :
+
+- \`"score_a"\`, \`"score_b"\` : les taux de réussite (arrondis à 3 décimales),
+- \`"regressions"\` : les entrées où A réussissait et B échoue — LES cas à lire en priorité,
+- \`"gains"\` : l'inverse,
+- \`"verdict"\` : \`"b_meilleur"\`, \`"a_meilleur"\` ou \`"egalite"\`.
+
+Une amélioration moyenne peut cacher des régressions graves : c'est tout l'intérêt de lister les deux colonnes plutôt qu'un simple delta.`,
+              starterCode: `def systeme_a(entree):
+    return {"q1": "paris", "q2": "4", "q3": "bleu", "q4": "je ne sais pas"}[entree]
+
+def systeme_b(entree):
+    return {"q1": "paris", "q2": "quatre", "q3": "bleu", "q4": "berlin"}[entree]
+
+JEU = [
+    {"entree": "q1", "attendu": "paris"},
+    {"entree": "q2", "attendu": "4"},
+    {"entree": "q3", "attendu": "bleu"},
+    {"entree": "q4", "attendu": "berlin"},
+]
+
+def metrique(prediction, attendu):
+    return prediction.strip().lower() == attendu
+
+def comparer_ab(systeme_a, systeme_b, jeu, metrique):
+    ...
+
+import json
+print(json.dumps(comparer_ab(systeme_a, systeme_b, JEU, metrique), ensure_ascii=False, indent=2))`,
+              solution: `def systeme_a(entree):
+    return {"q1": "paris", "q2": "4", "q3": "bleu", "q4": "je ne sais pas"}[entree]
+
+def systeme_b(entree):
+    return {"q1": "paris", "q2": "quatre", "q3": "bleu", "q4": "berlin"}[entree]
+
+JEU = [
+    {"entree": "q1", "attendu": "paris"},
+    {"entree": "q2", "attendu": "4"},
+    {"entree": "q3", "attendu": "bleu"},
+    {"entree": "q4", "attendu": "berlin"},
+]
+
+def metrique(prediction, attendu):
+    return prediction.strip().lower() == attendu
+
+def comparer_ab(systeme_a, systeme_b, jeu, metrique):
+    ok_a, ok_b = [], []
+    for cas in jeu:
+        ok_a.append(metrique(systeme_a(cas["entree"]), cas["attendu"]))
+        ok_b.append(metrique(systeme_b(cas["entree"]), cas["attendu"]))
+    n = len(jeu)
+    score_a = round(sum(ok_a) / n, 3)
+    score_b = round(sum(ok_b) / n, 3)
+    regressions = [jeu[i]["entree"] for i in range(n) if ok_a[i] and not ok_b[i]]
+    gains = [jeu[i]["entree"] for i in range(n) if ok_b[i] and not ok_a[i]]
+    if score_b > score_a:
+        verdict = "b_meilleur"
+    elif score_a > score_b:
+        verdict = "a_meilleur"
+    else:
+        verdict = "egalite"
+    return {"score_a": score_a, "score_b": score_b,
+            "regressions": regressions, "gains": gains, "verdict": verdict}
+
+import json
+print(json.dumps(comparer_ab(systeme_a, systeme_b, JEU, metrique), ensure_ascii=False, indent=2))`,
+              tests: `_r = comparer_ab(systeme_a, systeme_b, JEU, metrique)
+assert _r["score_a"] == 0.75 and _r["score_b"] == 0.75, "3/4 chacun"
+assert _r["regressions"] == ["q2"], "B a cassé q2 (répond 'quatre' au lieu de '4')"
+assert _r["gains"] == ["q4"], "B a gagné q4"
+assert _r["verdict"] == "egalite", "Scores égaux… mais les listes racontent une autre histoire !"
+_r2 = comparer_ab(systeme_a, systeme_a, JEU, metrique)
+assert _r2["regressions"] == [] and _r2["gains"] == [] and _r2["verdict"] == "egalite", "Un système contre lui-même"
+print("TESTS_PASS")`,
+              hints: [
+                'Évalue les deux systèmes cas par cas dans des listes de booléens parallèles.',
+                'Régression = ok_a[i] and not ok_b[i]. Gain = l\'inverse.',
+              ],
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -424,6 +731,122 @@ print("TESTS_PASS")`,
                 'taux_accord : zip(juge, humain) puis compter les paires égales.',
                 'sum(liste_de_booleens) compte les True — pratique pour p_juge et p_humain.',
                 'Suis la formule pas à pas et gère le cas accord_hasard == 1 AVANT la division.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm13l3e2',
+              title: "La matrice d'accord détaillée",
+              instructions: `Avant le kappa, le tableau croisé — il montre OÙ le juge diverge : \`matrice_accord(juge, humain)\` renvoie \`{"oui_oui": n, "oui_non": n, "non_oui": n, "non_non": n}\` (juge d'abord : \`oui_non\` = juge dit oui, humain dit non — les **faux positifs du juge**, souvent les plus dangereux car ils laissent passer de mauvaises réponses).`,
+              starterCode: `def matrice_accord(juge, humain):
+    ...
+
+juge   = [True, True, False, True, False]
+humain = [True, False, False, True, True]
+print(matrice_accord(juge, humain))`,
+              solution: `def matrice_accord(juge, humain):
+    m = {"oui_oui": 0, "oui_non": 0, "non_oui": 0, "non_non": 0}
+    for j, h in zip(juge, humain):
+        if j and h:
+            m["oui_oui"] += 1
+        elif j and not h:
+            m["oui_non"] += 1
+        elif not j and h:
+            m["non_oui"] += 1
+        else:
+            m["non_non"] += 1
+    return m
+
+juge   = [True, True, False, True, False]
+humain = [True, False, False, True, True]
+print(matrice_accord(juge, humain))`,
+              tests: `_m = matrice_accord([True, True, False, True, False], [True, False, False, True, True])
+assert _m == {"oui_oui": 2, "oui_non": 1, "non_oui": 1, "non_non": 1}, "Le tableau croisé complet"
+_p = matrice_accord([True, False], [True, False])
+assert _p == {"oui_oui": 1, "oui_non": 0, "non_oui": 0, "non_non": 1}, "Accord parfait : diagonale seulement"
+assert sum(_m.values()) == 5, "Les quatre cases couvrent tous les cas"
+print("TESTS_PASS")`,
+              hints: [
+                'zip(juge, humain) puis quatre branches — ou un dict indexé par le couple (j, h).',
+                'La convention : le juge en premier dans le nom des clés.',
+              ],
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm13l3e3',
+              title: "Défi — Le concours de juges",
+              instructions: `Tu as 3 prompts de juge candidats et un échantillon annoté : lequel industrialiser ? Écris \`concours(juges, humain, seuil=0.6)\` où \`juges\` est un dict \`nom → verdicts\` (kappa_cohen fourni) :
+
+1. calcule le kappa de chaque juge (arrondi à 3 décimales),
+2. renvoie \`{"kappas": {nom: kappa}, "fiables": [noms avec kappa ≥ seuil, triés par kappa décroissant], "champion": nom du meilleur (ou None si aucun fiable)}\`.
+
+C'est le protocole exact de sélection d'un LLM-juge avant sa mise en production.`,
+              starterCode: `def taux_accord(a, b):
+    return sum(1 for x, y in zip(a, b) if x == y) / len(b)
+
+def kappa_cohen(juge, humain):
+    n = len(humain)
+    p_j, p_h = sum(juge) / n, sum(humain) / n
+    hasard = p_j * p_h + (1 - p_j) * (1 - p_h)
+    if hasard == 1:
+        return 0.0
+    return (taux_accord(juge, humain) - hasard) / (1 - hasard)
+
+HUMAIN = [True, True, False, True, False, True, True, False, True, False]
+
+JUGES = {
+    "juge_strict":   [True, False, False, True, False, True, False, False, True, False],
+    "juge_laxiste":  [True] * 10,
+    "juge_aligne":   [True, True, False, True, False, True, True, False, False, False],
+}
+
+def concours(juges, humain, seuil=0.6):
+    ...
+
+import json
+print(json.dumps(concours(JUGES, HUMAIN), ensure_ascii=False, indent=2))`,
+              solution: `def taux_accord(a, b):
+    return sum(1 for x, y in zip(a, b) if x == y) / len(b)
+
+def kappa_cohen(juge, humain):
+    n = len(humain)
+    p_j, p_h = sum(juge) / n, sum(humain) / n
+    hasard = p_j * p_h + (1 - p_j) * (1 - p_h)
+    if hasard == 1:
+        return 0.0
+    return (taux_accord(juge, humain) - hasard) / (1 - hasard)
+
+HUMAIN = [True, True, False, True, False, True, True, False, True, False]
+
+JUGES = {
+    "juge_strict":   [True, False, False, True, False, True, False, False, True, False],
+    "juge_laxiste":  [True] * 10,
+    "juge_aligne":   [True, True, False, True, False, True, True, False, False, False],
+}
+
+def concours(juges, humain, seuil=0.6):
+    kappas = {nom: round(kappa_cohen(v, humain), 3) for nom, v in juges.items()}
+    fiables = sorted([n for n, k in kappas.items() if k >= seuil], key=lambda n: -kappas[n])
+    champion = fiables[0] if fiables else None
+    return {"kappas": kappas, "fiables": fiables, "champion": champion}
+
+import json
+print(json.dumps(concours(JUGES, HUMAIN), ensure_ascii=False, indent=2))`,
+              tests: `_r = concours(JUGES, HUMAIN)
+assert _r["kappas"]["juge_laxiste"] == 0.0, "Le laxiste (toujours oui) : kappa nul, démasqué"
+assert _r["kappas"]["juge_aligne"] > _r["kappas"]["juge_strict"], "L'aligné bat le strict"
+assert _r["champion"] == "juge_aligne", "Le champion"
+assert "juge_laxiste" not in _r["fiables"], "Le laxiste n'est pas fiable"
+_aucun = concours({"mauvais": [not h for h in HUMAIN]}, HUMAIN)
+assert _aucun["champion"] is None, "Aucun juge fiable : champion None"
+print("TESTS_PASS")`,
+              hints: [
+                'Une dict comprehension pour les kappas, un tri par -kappa pour les fiables.',
+                'Le champion est le premier de la liste triée — s\'il y en a un.',
               ],
             },
           },

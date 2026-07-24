@@ -107,6 +107,130 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm10l1e2',
+              title: "Découper et recoller les têtes",
+              instructions: `La plomberie du multi-head, isolée pour bien la voir :
+
+1. \`decouper_tetes(X, h)\` — découpe \`(n, d)\` en **liste** de h matrices \`(n, d/h)\` (slicing de colonnes),
+2. \`recoller(tranches)\` — l'inverse exact (\`np.concatenate(..., axis=1)\`).
+
+La propriété à garantir : \`recoller(decouper_tetes(X, h)) == X\` pour tout h divisant d. Ce petit aller-retour est au cœur de chaque couche d'attention de chaque LLM.`,
+              starterCode: `import numpy as np
+
+def decouper_tetes(X, h):
+    ...
+
+def recoller(tranches):
+    ...
+
+X = np.arange(12.0).reshape(2, 6)
+tranches = decouper_tetes(X, 3)
+for t in tranches:
+    print(t)
+print(np.allclose(recoller(tranches), X))`,
+              solution: `import numpy as np
+
+def decouper_tetes(X, h):
+    d = X.shape[1]
+    dh = d // h
+    return [X[:, i * dh:(i + 1) * dh] for i in range(h)]
+
+def recoller(tranches):
+    return np.concatenate(tranches, axis=1)
+
+X = np.arange(12.0).reshape(2, 6)
+tranches = decouper_tetes(X, 3)
+for t in tranches:
+    print(t)
+print(np.allclose(recoller(tranches), X))`,
+              tests: `import numpy as np
+_X = np.arange(12.0).reshape(2, 6)
+_tr = decouper_tetes(_X, 3)
+assert len(_tr) == 3, "3 têtes"
+assert all(t.shape == (2, 2) for t in _tr), "Chaque tranche fait (n, d/h)"
+assert np.allclose(_tr[0], [[0, 1], [6, 7]]), "La tête 0 prend les premières colonnes"
+assert np.allclose(recoller(_tr), _X), "L'aller-retour est parfait"
+assert np.allclose(recoller(decouper_tetes(_X, 2)), _X), "Pour tout h divisant d"
+assert len(decouper_tetes(_X, 1)) == 1, "h=1 : une seule tranche, la matrice entière"
+print("TESTS_PASS")`,
+              hints: [
+                'dh = d // h ; la tranche i couvre les colonnes [i*dh, (i+1)*dh).',
+                'Une list comprehension de slices fait decouper_tetes en deux lignes.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm10l1e3',
+              title: "Défi — Quelle tête regarde quoi ?",
+              instructions: `Un mini-outil d'interprétabilité : \`focalisation_des_tetes(Q, K, h)\` calcule, pour chaque tête, sa carte d'attention (softmax_lignes fourni) et mesure sa **focalisation** : le poids maximal moyen par ligne (\`P.max(axis=1).mean()\`). Une tête focalisée (proche de 1) regarde un token précis ; une tête diffuse (~1/n) regarde partout.
+
+Renvoie la liste des focalisations (floats arrondis à 3 décimales) et \`tete_la_plus_focalisee(Q, K, h)\` l'indice de la plus focalisée.`,
+              starterCode: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def focalisation_des_tetes(Q, K, h):
+    ...
+
+def tete_la_plus_focalisee(Q, K, h):
+    ...
+
+rng = np.random.RandomState(1)
+Q = rng.randn(4, 6); K = rng.randn(4, 6)
+Q[:, :3] *= 4; K[:, :3] *= 4   # on "aiguise" la première tête
+print(focalisation_des_tetes(Q, K, 2))
+print(tete_la_plus_focalisee(Q, K, 2))`,
+              solution: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def focalisation_des_tetes(Q, K, h):
+    d = Q.shape[1]
+    dh = d // h
+    focs = []
+    for i in range(h):
+        Qi = Q[:, i * dh:(i + 1) * dh]
+        Ki = K[:, i * dh:(i + 1) * dh]
+        P = softmax_lignes(Qi @ Ki.T / np.sqrt(dh))
+        focs.append(round(float(P.max(axis=1).mean()), 3))
+    return focs
+
+def tete_la_plus_focalisee(Q, K, h):
+    focs = focalisation_des_tetes(Q, K, h)
+    return focs.index(max(focs))
+
+rng = np.random.RandomState(1)
+Q = rng.randn(4, 6); K = rng.randn(4, 6)
+Q[:, :3] *= 4; K[:, :3] *= 4
+print(focalisation_des_tetes(Q, K, 2))
+print(tete_la_plus_focalisee(Q, K, 2))`,
+              tests: `import numpy as np
+_rng = np.random.RandomState(1)
+_Q = _rng.randn(4, 6); _K = _rng.randn(4, 6)
+_Q[:, :3] *= 4; _K[:, :3] *= 4
+_f = focalisation_des_tetes(_Q, _K, 2)
+assert len(_f) == 2, "Une focalisation par tête"
+assert all(0.25 <= v <= 1.0 for v in _f), "Entre 1/n et 1"
+assert _f[0] > _f[1], "La tête 0 (scores amplifiés) est la plus focalisée"
+assert tete_la_plus_focalisee(_Q, _K, 2) == 0, "Son indice"
+print("TESTS_PASS")`,
+              hints: [
+                'Réutilise le découpage en têtes, calcule la carte de chaque tête, puis P.max(axis=1).mean().',
+                'Attention : le sqrt utilise dh (la dimension de la tête), pas d.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -261,6 +385,141 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm10l2e2',
+              title: "RMSNorm, la normalisation moderne",
+              instructions: `Llama, Mistral, Qwen n'utilisent plus LayerNorm mais **RMSNorm**, encore plus simple : pas de centrage, juste une division par la racine de la moyenne des carrés :
+
+\`\`\`
+rms_norm(x) = x / sqrt(mean(x²) + eps)
+\`\`\`
+
+Écris \`rms_norm(X, eps=1e-6)\` par **ligne** (axis=1, keepdims). Les tests comparent son comportement à LayerNorm : même stabilisation d'échelle, sans soustraction de moyenne.`,
+              starterCode: `import numpy as np
+
+def rms_norm(X, eps=1e-6):
+    ...
+
+X = np.array([[3.0, 4.0], [100.0, 0.0]])
+print(rms_norm(X).round(3))`,
+              solution: `import numpy as np
+
+def rms_norm(X, eps=1e-6):
+    rms = np.sqrt((X ** 2).mean(axis=1, keepdims=True) + eps)
+    return X / rms
+
+X = np.array([[3.0, 4.0], [100.0, 0.0]])
+print(rms_norm(X).round(3))`,
+              tests: `import numpy as np
+_X = np.array([[3.0, 4.0], [100.0, 0.0]])
+_R = rms_norm(_X)
+assert _R.shape == _X.shape, "Shape préservée"
+_rms = np.sqrt((_R ** 2).mean(axis=1))
+assert np.allclose(_rms, 1.0, atol=1e-3), "Après RMSNorm, chaque ligne a un RMS de ~1"
+assert np.allclose(rms_norm(_X * 1000), _R, atol=1e-3), "Insensible à l'échelle : x1000 ne change rien"
+assert not np.isnan(rms_norm(np.zeros((2, 3)))).any(), "Ligne nulle : pas de NaN grâce à eps"
+_signe = rms_norm(np.array([[-2.0, 2.0]]))
+assert _signe[0, 0] < 0 < _signe[0, 1], "Pas de centrage : les signes sont préservés"
+print("TESTS_PASS")`,
+              hints: [
+                '(X ** 2).mean(axis=1, keepdims=True), + eps, sqrt, division. Quatre opérations.',
+                'Contrairement à LayerNorm : AUCUNE soustraction de moyenne.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm10l2e3',
+              title: "Défi — Empiler N blocs",
+              instructions: `Un GPT = le même bloc répété N fois. Avec \`bloc_transformer\` fourni, écris \`empiler(X, blocs)\` où \`blocs\` est une liste de paires \`(W1, W2)\` :
+
+1. applique chaque bloc successivement,
+2. enregistre la norme moyenne des activations (\`np.abs(X).mean()\`) AVANT le premier bloc puis après chacun,
+3. renvoie \`(X_final, normes)\`.
+
+Les tests vérifient la propriété qui permet l'empilement : la shape ne change jamais — et grâce aux résidus, les activations restent stables (pas d'explosion).`,
+              starterCode: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def attention(Q, K, V):
+    d = Q.shape[1]
+    return softmax_lignes(Q @ K.T / np.sqrt(d)) @ V
+
+def layer_norm(X):
+    return (X - X.mean(axis=1, keepdims=True)) / np.sqrt(X.var(axis=1, keepdims=True) + 1e-5)
+
+def bloc_transformer(X, W1, W2):
+    n = layer_norm(X)
+    X = X + attention(n, n, n)
+    n = layer_norm(X)
+    return X + np.maximum(0, n @ W1) @ W2
+
+def empiler(X, blocs):
+    ...
+
+rng = np.random.RandomState(0)
+X = rng.randn(3, 4)
+blocs = [(rng.randn(4, 8) * 0.1, rng.randn(8, 4) * 0.1) for _ in range(4)]
+X_final, normes = empiler(X, blocs)
+print("normes par couche :", [round(v, 2) for v in normes])`,
+              solution: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def attention(Q, K, V):
+    d = Q.shape[1]
+    return softmax_lignes(Q @ K.T / np.sqrt(d)) @ V
+
+def layer_norm(X):
+    return (X - X.mean(axis=1, keepdims=True)) / np.sqrt(X.var(axis=1, keepdims=True) + 1e-5)
+
+def bloc_transformer(X, W1, W2):
+    n = layer_norm(X)
+    X = X + attention(n, n, n)
+    n = layer_norm(X)
+    return X + np.maximum(0, n @ W1) @ W2
+
+def empiler(X, blocs):
+    normes = [float(np.abs(X).mean())]
+    for W1, W2 in blocs:
+        X = bloc_transformer(X, W1, W2)
+        normes.append(float(np.abs(X).mean()))
+    return X, normes
+
+rng = np.random.RandomState(0)
+X = rng.randn(3, 4)
+blocs = [(rng.randn(4, 8) * 0.1, rng.randn(8, 4) * 0.1) for _ in range(4)]
+X_final, normes = empiler(X, blocs)
+print("normes par couche :", [round(v, 2) for v in normes])`,
+              tests: `import numpy as np
+_rng = np.random.RandomState(0)
+_X = _rng.randn(3, 4)
+_blocs = [(_rng.randn(4, 8) * 0.1, _rng.randn(8, 4) * 0.1) for _ in range(4)]
+_Xf, _normes = empiler(_X, _blocs)
+assert _Xf.shape == (3, 4), "La shape survit à l'empilement — condition sine qua non"
+assert len(_normes) == 5, "Initial + une mesure par bloc"
+assert all(v < 100 for v in _normes), "Pas d'explosion d'activations (merci les résidus + normes)"
+_Xf2, _ = empiler(_X, _blocs[:1])
+assert np.allclose(_Xf2, bloc_transformer(_X, *_blocs[0])), "empiler([bloc]) == bloc appliqué une fois"
+_Xf0, _n0 = empiler(_X, [])
+assert np.allclose(_Xf0, _X) and len(_n0) == 1, "Zéro bloc : X inchangé, une seule mesure"
+print("TESTS_PASS")`,
+              hints: [
+                'Mesure avant la boucle, puis après chaque bloc — comme l\'historique des pertes du module 7.',
+                'for W1, W2 in blocs: déballe directement les paires.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -405,6 +664,107 @@ print("TESTS_PASS")`,
                 'echantillonner : probas = softmax_t(...), puis int(rng.choice(len(logits), p=probas)).',
                 'top_k : np.argsort(logits)[::-1][:k] donne les k meilleurs indices ; np.full_like(logits, -np.inf) crée le tableau filtré.',
                 'Si le test de non-modification échoue : tu écris dans logits au lieu d\'un nouveau tableau.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm10l3e2',
+              title: "Top-p (nucleus sampling)",
+              instructions: `Le paramètre \`top_p\` des API, implémenté : au lieu de garder k tokens fixes, on garde **les plus probables jusqu'à couvrir p de probabilité cumulée**. Écris \`top_p_filtre(probas, p)\` :
+
+1. trie les indices par probabilité décroissante (\`np.argsort(...)[::-1]\`),
+2. accumule les probabilités dans l'ordre ; garde les indices jusqu'à ce que le cumul **atteigne ou dépasse** p (le token qui fait franchir le seuil est inclus),
+3. renvoie le **set** des indices gardés.
+
+Contrairement à top-k, le nombre de candidats s'adapte : distribution sûre → 1-2 tokens ; distribution incertaine → beaucoup.`,
+              starterCode: `import numpy as np
+
+def top_p_filtre(probas, p):
+    ...
+
+probas = np.array([0.5, 0.3, 0.1, 0.06, 0.04])
+print(top_p_filtre(probas, 0.8))
+print(top_p_filtre(probas, 0.95))`,
+              solution: `import numpy as np
+
+def top_p_filtre(probas, p):
+    ordre = np.argsort(probas)[::-1]
+    garde = set()
+    cumul = 0.0
+    for i in ordre:
+        garde.add(int(i))
+        cumul += float(probas[i])
+        if cumul >= p:
+            break
+    return garde
+
+probas = np.array([0.5, 0.3, 0.1, 0.06, 0.04])
+print(top_p_filtre(probas, 0.8))
+print(top_p_filtre(probas, 0.95))`,
+              tests: `import numpy as np
+_p = np.array([0.5, 0.3, 0.1, 0.06, 0.04])
+assert top_p_filtre(_p, 0.8) == {0, 1}, "0.5 + 0.3 = 0.8 : le cumul atteint p, on s'arrête"
+assert top_p_filtre(_p, 0.85) == {0, 1, 2}, "Il faut le 3e token pour dépasser 0.85"
+assert top_p_filtre(_p, 0.4) == {0}, "Le meilleur token suffit"
+assert top_p_filtre(np.array([0.25, 0.25, 0.25, 0.25]), 0.6) == {0, 1, 2} or len(top_p_filtre(np.array([0.25, 0.25, 0.25, 0.25]), 0.6)) == 3, "Distribution plate : il faut 3 tokens pour couvrir 0.6"
+assert top_p_filtre(_p, 1.0) == {0, 1, 2, 3, 4}, "p=1 : tout le vocabulaire"
+print("TESTS_PASS")`,
+              hints: [
+                'Parcours les indices triés en accumulant ; le break APRÈS l\'ajout inclut le token-frontière.',
+                'Un set d\'int Python (conversion int(i)).',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm10l3e3',
+              title: "Défi — Pénalité de répétition",
+              instructions: `L'anti-radotage des API (\`frequency_penalty\`) : baisser les logits des tokens déjà générés. Écris \`penaliser(logits, deja_generes, penalite)\` :
+
+1. travaille sur une **copie** des logits (\`logits.copy()\`),
+2. soustrais \`penalite × nombre d'occurrences\` du token dans \`deja_generes\` (une liste d'indices) — un token répété 3 fois est pénalisé 3 fois plus,
+3. renvoie la copie.
+
+Puis observe dans les tests l'effet de bout en bout : sans pénalité, le greedy boucle ; avec, il explore.`,
+              starterCode: `import numpy as np
+
+def penaliser(logits, deja_generes, penalite=1.0):
+    ...
+
+logits = np.array([3.0, 2.5, 1.0])
+print(penaliser(logits, [0, 0, 1], penalite=1.0))`,
+              solution: `import numpy as np
+
+def penaliser(logits, deja_generes, penalite=1.0):
+    nouveaux = logits.copy()
+    for t in deja_generes:
+        nouveaux[t] -= penalite
+    return nouveaux
+
+logits = np.array([3.0, 2.5, 1.0])
+print(penaliser(logits, [0, 0, 1], penalite=1.0))`,
+              tests: `import numpy as np
+_l = np.array([3.0, 2.5, 1.0])
+_r = penaliser(_l, [0, 0, 1], penalite=1.0)
+assert np.allclose(_r, [1.0, 1.5, 1.0]), "Token 0 pénalisé 2 fois, token 1 une fois"
+assert np.allclose(_l, [3.0, 2.5, 1.0]), "Les logits d'origine ne doivent PAS être modifiés (copie !)"
+assert np.allclose(penaliser(_l, [], 1.0), _l), "Rien de généré : rien ne change"
+# Effet anti-boucle : le greedy finit par changer de token
+_hist = []
+_courants = _l.copy()
+for _ in range(4):
+    _t = int(np.argmax(penaliser(_l, _hist, penalite=1.0)))
+    _hist.append(_t)
+assert len(set(_hist)) > 1, "Avec la pénalité, le greedy ne répète plus le même token à l'infini"
+print("TESTS_PASS")`,
+              hints: [
+                'logits.copy() d\'abord — modifier l\'entrée est un bug classique aux effets lointains.',
+                'Une simple boucle sur deja_generes : chaque occurrence soustrait la pénalité.',
               ],
               needsNumpy: true,
             },

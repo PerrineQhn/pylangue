@@ -95,6 +95,108 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm9l1e2',
+              title: "Softmax en batch",
+              instructions: `Les modèles ne traitent jamais un vecteur à la fois : écris \`softmax_batch(M, temperature=1.0)\` qui applique le softmax à **chaque ligne** d'une matrice (chaque ligne est un vecteur de logits indépendant).
+
+Les outils du broadcasting : \`M.max(axis=1, keepdims=True)\` et \`.sum(axis=1, keepdims=True)\` — le \`keepdims\` garde la shape \`(n, 1)\` pour que la division se diffuse ligne par ligne.`,
+              starterCode: `import numpy as np
+
+def softmax_batch(M, temperature=1.0):
+    ...
+
+M = np.array([[2.0, 1.0, 0.1], [0.0, 0.0, 5.0]])
+print(softmax_batch(M).round(3))`,
+              solution: `import numpy as np
+
+def softmax_batch(M, temperature=1.0):
+    Z = M / temperature
+    e = np.exp(Z - Z.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+M = np.array([[2.0, 1.0, 0.1], [0.0, 0.0, 5.0]])
+print(softmax_batch(M).round(3))`,
+              tests: `import numpy as np
+_P = softmax_batch(np.array([[2.0, 1.0, 0.1], [0.0, 0.0, 5.0]]))
+assert _P.shape == (2, 3), "Shape préservée"
+assert np.allclose(_P.sum(axis=1), [1.0, 1.0]), "Chaque LIGNE somme à 1"
+assert _P[1, 2] > 0.98, "Le logit 5.0 domine sa ligne"
+_S = softmax_batch(np.array([[1000.0, 999.0], [3.0, 3.0]]))
+assert not np.isnan(_S).any(), "Stable même avec de grands logits (max par ligne soustrait)"
+assert np.allclose(_S[1], [0.5, 0.5]), "Logits égaux : uniforme"
+_F = softmax_batch(np.array([[2.0, 1.0, 0.1]]), temperature=0.05)
+assert _F[0, 0] > 0.99, "Basse température : quasi one-hot, ligne par ligne"
+print("TESTS_PASS")`,
+              hints: [
+                'Exactement ton softmax de l\'exercice 1, avec axis=1, keepdims=True partout.',
+                'La division par la température se fait sur toute la matrice d\'un coup.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm9l1e3',
+              title: "Défi — Calibrer la température",
+              instructions: `Mission de réglage réelle : on veut que le modèle soit « confiant mais pas rigide » — que la probabilité du meilleur token soit proche d'une cible (ex : 0.8). Écris \`calibrer(logits, cible, temperatures)\` qui :
+
+1. pour chaque température candidate, calcule \`softmax(logits / T)\` et regarde la probabilité max,
+2. renvoie la température dont la proba max est **la plus proche** de la cible (au sens de l'écart absolu ; la première en cas d'égalité).
+
+C'est une recherche par balayage (*grid search*) — la méthode de réglage la plus utilisée en pratique, ici appliquée au paramètre que tu connais le mieux.`,
+              starterCode: `import numpy as np
+
+def softmax_t(logits, temperature):
+    z = logits / temperature
+    e = np.exp(z - z.max())
+    return e / e.sum()
+
+def calibrer(logits, cible, temperatures):
+    ...
+
+logits = np.array([3.0, 2.0, 1.0, 0.0])
+print(calibrer(logits, cible=0.8, temperatures=[0.3, 0.5, 1.0, 2.0, 5.0]))`,
+              solution: `import numpy as np
+
+def softmax_t(logits, temperature):
+    z = logits / temperature
+    e = np.exp(z - z.max())
+    return e / e.sum()
+
+def calibrer(logits, cible, temperatures):
+    meilleure, ecart_min = None, float("inf")
+    for T in temperatures:
+        p_max = float(softmax_t(logits, T).max())
+        ecart = abs(p_max - cible)
+        if ecart < ecart_min:
+            meilleure, ecart_min = T, ecart
+    return meilleure
+
+logits = np.array([3.0, 2.0, 1.0, 0.0])
+print(calibrer(logits, cible=0.8, temperatures=[0.3, 0.5, 1.0, 2.0, 5.0]))`,
+              tests: `import numpy as np
+_logits = np.array([3.0, 2.0, 1.0, 0.0])
+_r = calibrer(_logits, 0.99, [0.1, 1.0, 5.0])
+assert _r == 0.1, "Cible quasi déterministe : la température la plus basse"
+_r2 = calibrer(_logits, 0.25, [0.1, 1.0, 100.0])
+assert _r2 == 100.0, "Cible uniforme (1/4) : la température la plus haute"
+_r3 = calibrer(_logits, 0.8, [0.3, 0.5, 1.0, 2.0, 5.0])
+_p = {T: float(softmax_t(_logits, T).max()) for T in [0.3, 0.5, 1.0, 2.0, 5.0]}
+_attendue = min(_p, key=lambda T: abs(_p[T] - 0.8))
+assert _r3 == _attendue, "La température dont la proba max approche le mieux 0.8"
+print("TESTS_PASS")`,
+              hints: [
+                'Balayage : garde la meilleure candidate et son écart minimal au fil de la boucle.',
+                'La proba max d\'un softmax : .max() tout simplement.',
+                'La comparaison stricte < garde la PREMIÈRE en cas d\'égalité.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -249,6 +351,129 @@ print("TESTS_PASS")`,
             },
           },
           {
+            kind: 'exercise',
+            exercise: {
+              id: 'm9l2e2',
+              title: "La carte d'attention",
+              instructions: `Les fameuses « cartes d'attention » des papiers et des outils d'interprétabilité, ce sont exactement les poids AVANT la multiplication par V. Écris \`carte_attention(Q, K)\` qui renvoie la matrice \`(n, n)\` : \`softmax_lignes(Q @ K.T / sqrt(d))\`.
+
+Puis \`token_le_plus_regarde(P)\` : l'indice du token qui reçoit le plus d'attention **en moyenne** (moyenne des colonnes, argmax).`,
+              starterCode: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def carte_attention(Q, K):
+    ...
+
+def token_le_plus_regarde(P):
+    ...
+
+Q = np.array([[1.0, 0.0], [0.9, 0.1], [0.0, 1.0]])
+K = np.array([[1.0, 0.0], [1.0, 0.1], [0.0, 1.0]])
+P = carte_attention(Q, K)
+print(P.round(2))
+print("le plus regardé :", token_le_plus_regarde(P))`,
+              solution: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def carte_attention(Q, K):
+    d = Q.shape[1]
+    return softmax_lignes(Q @ K.T / np.sqrt(d))
+
+def token_le_plus_regarde(P):
+    return int(P.mean(axis=0).argmax())
+
+Q = np.array([[1.0, 0.0], [0.9, 0.1], [0.0, 1.0]])
+K = np.array([[1.0, 0.0], [1.0, 0.1], [0.0, 1.0]])
+P = carte_attention(Q, K)
+print(P.round(2))
+print("le plus regardé :", token_le_plus_regarde(P))`,
+              tests: `import numpy as np
+_Q = np.array([[1.0, 0.0], [0.9, 0.1], [0.0, 1.0]])
+_K = np.array([[1.0, 0.0], [1.0, 0.1], [0.0, 1.0]])
+_P = carte_attention(_Q, _K)
+assert _P.shape == (3, 3), "Une carte (n, n)"
+assert np.allclose(_P.sum(axis=1), 1.0), "Chaque ligne (chaque token qui regarde) somme à 1"
+assert (_P >= 0).all(), "Des poids positifs"
+assert _P[0, 2] < _P[0, 0], "Le token 0 regarde plus les tokens qui lui ressemblent"
+assert token_le_plus_regarde(np.array([[0.1, 0.9], [0.2, 0.8]])) == 1, "La colonne 1 domine en moyenne"
+print("TESTS_PASS")`,
+              hints: [
+                'C\'est la moitié de ton attention() — on s\'arrête avant le @ V.',
+                'P.mean(axis=0) moyenne les colonnes : "à quel point chaque token est regardé".',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm9l2e3',
+              title: "Défi — Attention avec masque de padding",
+              instructions: `Retrouvailles avec ton exercice de padding (module 5) : dans un batch, les positions de remplissage ne doivent recevoir **aucune** attention. Écris \`attention_masquee(Q, K, V, masque)\` où \`masque\` est le vecteur 0/1 des positions réelles :
+
+1. calcule les scores habituels,
+2. mets à \`-np.inf\` les **colonnes** j où \`masque[j] == 0\` (\`np.where\` sur \`masque[None, :] == 0\`),
+3. softmax par ligne, puis \`@ V\`.
+
+C'est exactement le rôle de l'attention_mask que tu passeras aux modèles Hugging Face.`,
+              starterCode: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def attention_masquee(Q, K, V, masque):
+    ...
+
+rng = np.random.RandomState(0)
+Q = rng.randn(4, 3); K = rng.randn(4, 3); V = rng.randn(4, 3)
+masque = np.array([1, 1, 1, 0])   # le 4e token est du padding
+print(attention_masquee(Q, K, V, masque).round(2))`,
+              solution: `import numpy as np
+
+def softmax_lignes(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True))
+    return e / e.sum(axis=1, keepdims=True)
+
+def attention_masquee(Q, K, V, masque):
+    d = Q.shape[1]
+    scores = Q @ K.T / np.sqrt(d)
+    scores = np.where(masque[None, :] == 0, -np.inf, scores)
+    return softmax_lignes(scores) @ V
+
+rng = np.random.RandomState(0)
+Q = rng.randn(4, 3); K = rng.randn(4, 3); V = rng.randn(4, 3)
+masque = np.array([1, 1, 1, 0])
+print(attention_masquee(Q, K, V, masque).round(2))`,
+              tests: `import numpy as np
+_rng = np.random.RandomState(0)
+_Q = _rng.randn(4, 3); _K = _rng.randn(4, 3); _V = _rng.randn(4, 3)
+_masque = np.array([1, 1, 1, 0])
+_out = attention_masquee(_Q, _K, _V, _masque)
+assert _out.shape == (4, 3), "Shape préservée"
+# Changer la valeur du token paddé ne doit RIEN changer
+_V2 = _V.copy(); _V2[3] = 999.0
+_K2 = _K.copy(); _K2[3] = 999.0
+assert np.allclose(_out, attention_masquee(_Q, _K2, _V2, _masque)), "Le token paddé est invisible : le modifier ne change rien"
+_plein = np.array([1, 1, 1, 1])
+_d = _Q.shape[1]
+_ref = softmax_lignes(_Q @ _K.T / np.sqrt(_d)) @ _V
+assert np.allclose(attention_masquee(_Q, _K, _V, _plein), _ref), "Masque plein : attention normale"
+print("TESTS_PASS")`,
+              hints: [
+                'masque[None, :] transforme (n,) en (1, n) : le broadcasting masque les COLONNES.',
+                'Même mécanique que le masque causal : -inf avant le softmax, et la renormalisation est automatique.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
             kind: 'quiz',
             questions: [
               {
@@ -378,6 +603,128 @@ print("TESTS_PASS")`,
                 'np.triu(matrice, k=1) garde le triangle STRICTEMENT au-dessus de la diagonale — exactement les positions futures.',
                 'np.where(condition, -np.inf, scores) remplace sans boucle.',
                 'Le softmax fourni gère -inf proprement (exp(-inf) = 0).',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm9l3e2',
+              title: "Construire et vérifier le masque",
+              instructions: `Deux utilitaires d'audit :
+
+1. \`masque_causal(n)\` — la matrice booléenne \`(n, n)\` avec \`True\` sur les positions futures (\`np.triu(np.ones((n, n), dtype=bool), k=1)\`),
+2. \`est_causale(P, tolerance=1e-9)\` — vérifie qu'une matrice de poids d'attention respecte la causalité : tous les poids aux positions futures sont ≤ tolérance. C'est un test unitaire qu'on écrit réellement quand on implémente un transformer.`,
+              starterCode: `import numpy as np
+
+def masque_causal(n):
+    ...
+
+def est_causale(P, tolerance=1e-9):
+    ...
+
+print(masque_causal(3))
+P_ok = np.array([[1.0, 0.0], [0.5, 0.5]])
+P_ko = np.array([[0.9, 0.1], [0.5, 0.5]])
+print(est_causale(P_ok), est_causale(P_ko))`,
+              solution: `import numpy as np
+
+def masque_causal(n):
+    return np.triu(np.ones((n, n), dtype=bool), k=1)
+
+def est_causale(P, tolerance=1e-9):
+    futur = masque_causal(P.shape[0])
+    return bool((P[futur] <= tolerance).all())
+
+print(masque_causal(3))
+P_ok = np.array([[1.0, 0.0], [0.5, 0.5]])
+P_ko = np.array([[0.9, 0.1], [0.5, 0.5]])
+print(est_causale(P_ok), est_causale(P_ko))`,
+              tests: `import numpy as np
+_m = masque_causal(3)
+assert _m.dtype == bool and _m.shape == (3, 3), "Matrice booléenne (n, n)"
+assert _m.sum() == 3, "3 positions futures pour n=3 (au-dessus de la diagonale)"
+assert not _m[1, 0] and _m[0, 1], "Le passé est False, le futur est True"
+assert est_causale(np.array([[1.0, 0.0], [0.5, 0.5]])), "Triangulaire inférieure : causale"
+assert not est_causale(np.array([[0.9, 0.1], [0.5, 0.5]])), "Un poids vers le futur : violation détectée"
+assert est_causale(np.eye(4)), "L'identité est causale"
+print("TESTS_PASS")`,
+              hints: [
+                'np.triu(..., k=1) : triangle STRICTEMENT supérieur.',
+                'P[masque_booleen] extrait les positions futures ; .all() vérifie qu\'elles sont toutes ~nulles.',
+              ],
+              needsNumpy: true,
+            },
+          },
+          {
+            kind: 'exercise',
+            exercise: {
+              id: 'm9l3e3',
+              title: "Défi — Simuler le KV-cache",
+              instructions: `LE mécanisme qui rend la génération rapide : à chaque nouveau token, on ne recalcule pas l'attention de toute la séquence — on **ajoute** les K et V du nouveau token au cache et on ne calcule que SA ligne d'attention. Écris \`etape_generation(K_cache, V_cache, q, k, v)\` :
+
+1. ajoute \`k\` et \`v\` au cache (\`np.vstack([cache, vecteur])\`),
+2. calcule l'attention du seul nouveau token : \`softmax(q @ K_cache.T / sqrt(d)) @ V_cache\` (q est un vecteur, le softmax est un softmax simple),
+3. renvoie \`(sortie, K_cache, V_cache)\`.
+
+Les tests vérifient LA propriété magique : la sortie est identique à la dernière ligne d'une attention causale complète recalculée de zéro — pour une fraction du coût.`,
+              starterCode: `import numpy as np
+
+def softmax(x):
+    e = np.exp(x - x.max())
+    return e / e.sum()
+
+def etape_generation(K_cache, V_cache, q, k, v):
+    ...
+
+K = np.zeros((0, 2)); V = np.zeros((0, 2))   # caches vides
+rng = np.random.RandomState(0)
+for t in range(3):
+    q = rng.randn(2); k = rng.randn(2); v = rng.randn(2)
+    sortie, K, V = etape_generation(K, V, q, k, v)
+    print(f"token {t} : cache = {K.shape[0]} entrées, sortie = {sortie.round(2)}")`,
+              solution: `import numpy as np
+
+def softmax(x):
+    e = np.exp(x - x.max())
+    return e / e.sum()
+
+def etape_generation(K_cache, V_cache, q, k, v):
+    K_cache = np.vstack([K_cache, k])
+    V_cache = np.vstack([V_cache, v])
+    d = q.shape[0]
+    poids = softmax(q @ K_cache.T / np.sqrt(d))
+    return poids @ V_cache, K_cache, V_cache
+
+K = np.zeros((0, 2)); V = np.zeros((0, 2))
+rng = np.random.RandomState(0)
+for t in range(3):
+    q = rng.randn(2); k = rng.randn(2); v = rng.randn(2)
+    sortie, K, V = etape_generation(K, V, q, k, v)
+    print(f"token {t} : cache = {K.shape[0]} entrées, sortie = {sortie.round(2)}")`,
+              tests: `import numpy as np
+_rng = np.random.RandomState(7)
+_Qs = _rng.randn(4, 2); _Ks = _rng.randn(4, 2); _Vs = _rng.randn(4, 2)
+_K = np.zeros((0, 2)); _V = np.zeros((0, 2))
+_sorties = []
+for _t in range(4):
+    _s, _K, _V = etape_generation(_K, _V, _Qs[_t], _Ks[_t], _Vs[_t])
+    _sorties.append(_s)
+assert _K.shape == (4, 2), "Le cache grandit d'une entrée par token"
+# Référence : attention causale complète recalculée
+def _softmax_l(S):
+    e = np.exp(S - S.max(axis=1, keepdims=True)); return e / e.sum(axis=1, keepdims=True)
+_S = _Qs @ _Ks.T / np.sqrt(2)
+_S = np.where(np.triu(np.ones((4, 4)), 1) == 1, -np.inf, _S)
+_ref = _softmax_l(_S) @ _Vs
+for _t in range(4):
+    assert np.allclose(_sorties[_t], _ref[_t]), f"La sortie du token {_t} via cache doit égaler l'attention causale complète"
+print("TESTS_PASS")`,
+              hints: [
+                'np.vstack ajoute une ligne à une matrice (même à une matrice vide (0, d)).',
+                'q @ K_cache.T donne un vecteur de scores (un par entrée du cache) : softmax simple, pas par lignes.',
+                'La causalité est gratuite : le cache ne contient QUE le passé.',
               ],
               needsNumpy: true,
             },
